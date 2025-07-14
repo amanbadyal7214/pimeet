@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import MeetingControls from '../components/meeting/MeetingControls';
 import ChatPanel from '../components/meeting/ChatPanel';
 import Modal from '../components/ui/Modal';
@@ -14,14 +14,17 @@ const MeetingPage: React.FC = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const displayName = searchParams.get('name') || 'Guest';
+  const state = location.state as { creatorName?: string; meetingTitle?: string };
+  const displayName = state?.creatorName || searchParams.get('name') || 'Guest';
+  const title = state?.meetingTitle || 'Untitled Meeting';
+
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [showParticipantsModal, setShowParticipantsModal] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
   const [meetingTime, setMeetingTime] = useState(0);
-  const [layout, setLayout] = useState<'grid' | 'spotlight'>('grid');
   const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
 
@@ -42,7 +45,7 @@ const MeetingPage: React.FC = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setMeetingTime(prev => prev + 1);
+      setMeetingTime((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -60,7 +63,10 @@ const MeetingPage: React.FC = () => {
     ];
 
     remoteUserDisplayNames.forEach((name, userId) => {
-      const status = remoteUserStatus.get(userId) || { audioEnabled: true, videoEnabled: true };
+      const status = remoteUserStatus.get(userId) || {
+        audioEnabled: true,
+        videoEnabled: true,
+      };
       updated.push({
         userId,
         name,
@@ -72,10 +78,17 @@ const MeetingPage: React.FC = () => {
     });
 
     setParticipants(updated);
-  }, [localStream, remoteStreams, remoteUserDisplayNames, remoteUserStatus, localAudioEnabled, localVideoEnabled]);
+  }, [
+    localStream,
+    remoteStreams,
+    remoteUserDisplayNames,
+    remoteUserStatus,
+    localAudioEnabled,
+    localVideoEnabled,
+  ]);
 
   useEffect(() => {
-    const pinned = participants.find(p => p.userId === pinnedParticipantId);
+    const pinned = participants.find((p) => p.userId === pinnedParticipantId);
     if (pinned?.videoEnabled && pinned?.stream && pinnedVideoRef.current) {
       pinnedVideoRef.current.srcObject = pinned.stream;
     }
@@ -107,7 +120,7 @@ const MeetingPage: React.FC = () => {
   };
 
   const renderMainView = () => {
-    const pinned = participants.find(p => p.userId === pinnedParticipantId);
+    const pinned = participants.find((p) => p.userId === pinnedParticipantId);
 
     if (pinned) {
       if (pinned.videoEnabled && pinned.stream) {
@@ -134,7 +147,6 @@ const MeetingPage: React.FC = () => {
       }
     }
 
-    // If no pinned participant
     if (localStream && localVideoEnabled) {
       return (
         <div className="relative w-full h-full">
@@ -161,8 +173,18 @@ const MeetingPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-800 p-2 fixed top-0 left-0 right-0">
-      <div className="flex flex-1 space-x-6 overflow-hidden relative">
+      {/* Info Icon with Title Hover */}
+      <div className="absolute top-4 right-4 z-50 group">
+        <div className="flex items-center space-x-2 cursor-pointer">
+          <div className="bg-slate-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all duration-300 group-hover:w-48 group-hover:rounded-full group-hover:justify-start px-2 bg-opacity-70 overflow-hidden">
+            <span className="ml-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              {title}
+            </span>
+          </div>
+        </div>
+      </div>
 
+      <div className="flex flex-1 space-x-6 overflow-hidden relative">
         {/* Chat Panel */}
         {isChatOpen && (
           <div className="absolute top-4 left-4 w-96 h-[80vh] z-50 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
@@ -183,7 +205,7 @@ const MeetingPage: React.FC = () => {
           </div>
         )}
 
-        {/* Participants Grid */}
+        {/* Participants */}
         <div className="flex flex-col w-82 max-h-[80vh] overflow-y-auto scrollbar-hide">
           <div className="grid grid-cols-2 p-1 gap-4">
             {participants.map((participant) => (
@@ -202,16 +224,6 @@ const MeetingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* View Participants Button */}
-        {/* <div className='absolute bottom-4 left-4'>
-          <button onClick={handleShowParticipants} className="relative inline-flex h-12 overflow-hidden rounded-full p-[1px]">
-            <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)]" />
-            <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-slate-950 px-3 py-1 text-sm font-medium text-white backdrop-blur-3xl">
-              View Participants
-            </span>
-          </button>
-        </div> */}
-
         {/* Participants Modal */}
         <Modal isOpen={showParticipantsModal} onClose={() => setShowParticipantsModal(false)} title="Participants">
           <div className="max-h-[300px] overflow-y-auto px-4 py-2 space-y-2">
@@ -227,7 +239,7 @@ const MeetingPage: React.FC = () => {
         {/* Main Video View */}
         <div className="flex-1 flex flex-col rounded-xl overflow-hidden bg-gray-100 shadow-lg relative">
           {renderMainView()}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 bg-black bg-opacity-50 rounded-full p-3 shadow-lg">
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 bg-black bg-opacity-30 rounded-full p-1 shadow-lg">
             <MeetingControls
               audioEnabled={localAudioEnabled}
               videoEnabled={localVideoEnabled}
