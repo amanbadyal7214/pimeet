@@ -9,9 +9,9 @@ import Button from '../components/ui/Button';
 import Header from '../components/layout/Header';
 import { createClass } from '../api/classApi';
 
-const meetingTitleOptions = ["Team Sync", "Project Review", "1-on-1"];
+const meetingTitleOptions = ["Batch 9-11", "Batch 11-1", "Batch 2-4","Batch 4-6"];
 const trainerOptions = ["John Doe", "Aman Badyal", "Riya Kapoor"];
-const technologyOptions = ["React", "Node.js", "Python", "Java"];
+const technologyOptions = ["MERN Stack", "PYTHON", "JAVA", "REACT"];
 
 type Guest = {
   email: string;
