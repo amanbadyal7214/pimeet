@@ -97,7 +97,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// 🧼 Leave helper
+
 function handleUserLeaveRoom(socket, roomId) {
   const room = rooms.get(roomId);
   if (room) {

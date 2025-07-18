@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Video, Menu } from 'lucide-react';
 import Button from '../ui/Button';
 
-
 interface HeaderProps {
   onMenuToggle?: () => void;
 }
@@ -19,7 +18,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           {onMenuToggle && (
             <button
               onClick={onMenuToggle}
-              className="mr-3 text-neutral-200 hover:text-gray-700 md:hidden"
+              aria-label="Toggle menu"
+              className="mr-3 text-neutral-200 hover:text-gray-300 md:hidden"
             >
               <Menu size={24} />
             </button>
@@ -29,20 +29,30 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
             <span className="font-semibold text-xl text-neutral-300">Pi-Meet</span>
           </Link>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          <Link to="/new-meeting" className="inline-block">
-  <Button variant="outline" size="md" className="bg-neutral-100 hover:bg-neutral-300 text-gray-900">
-    Create Meeting
-  </Button>
-</Link>
-         
-        <Link to="/" className="inline-block">
-  <Button variant="outline" size="md" className="bg-neutral-100 hover:bg-neutral-300 text-gray-900">
-    Join Meeting
-  </Button>
-</Link>
-        </div>
+
+        {!isInMeeting && (
+          <div className="flex items-center space-x-3">
+            <Link to="/new-meeting">
+              <Button
+                variant="outline"
+                size="md"
+                className="bg-neutral-100 hover:bg-neutral-300 text-gray-900"
+              >
+                Create Meeting
+              </Button>
+            </Link>
+
+            <Link to="/">
+              <Button
+                variant="outline"
+                size="md"
+                className="bg-neutral-100 hover:bg-neutral-300 text-gray-900"
+              >
+                Join Meeting
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );
