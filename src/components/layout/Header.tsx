@@ -31,6 +31,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         </div>
         
         <div className="flex items-center space-x-3">
+          <Link to="/new-meeting" className="inline-block">
+  <Button variant="outline" size="md" className="bg-neutral-100 hover:bg-neutral-300 text-gray-900">
+    Create Meeting
+  </Button>
+</Link>
          
         <Link to="/" className="inline-block">
   <Button variant="outline" size="md" className="bg-neutral-100 hover:bg-neutral-300 text-gray-900">
