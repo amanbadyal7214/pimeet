@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import {
+  useParams,
+  useSearchParams,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom';
 import MeetingControls from '../components/meeting/MeetingControls';
 import ChatPanel from '../components/meeting/ChatPanel';
-import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import { formatTime } from '../utils/meeting';
 import { useWebRTC } from '../hooks/useWebRTC';
 import ParticipantThumbnail from '../components/meeting/ParticipantThumbnail';
 import TaskList from '../components/meeting/TaskList';
 import Avatar from '../components/ui/Avatar';
+import { Drawer, Modal } from 'antd';
+
 
 const MeetingPage: React.FC = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -16,14 +22,17 @@ const MeetingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const state = location.state as { creatorName?: string; meetingTitle?: string };
+  const state = location.state as {
+    creatorName?: string;
+    meetingTitle?: string;
+  };
   const displayName = state?.creatorName || searchParams.get('name') || 'Guest';
   const title = state?.meetingTitle || 'Untitled Meeting';
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [showTasks, setShowTasks] = useState(false);
-  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
-  const [showConfirmLeave, setShowConfirmLeave] = useState(false);
+  const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
+  const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
+  const [participantsDrawerOpen, setParticipantsDrawerOpen] = useState(false);
+  const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
   const [meetingTime, setMeetingTime] = useState(0);
   const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -44,9 +53,7 @@ const MeetingPage: React.FC = () => {
   } = useWebRTC(meetingId || '');
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMeetingTime((prev) => prev + 1);
-    }, 1000);
+    const interval = setInterval(() => setMeetingTime(prev => prev + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -88,7 +95,7 @@ const MeetingPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    const pinned = participants.find((p) => p.userId === pinnedParticipantId);
+    const pinned = participants.find(p => p.userId === pinnedParticipantId);
     if (pinned?.videoEnabled && pinned?.stream && pinnedVideoRef.current) {
       pinnedVideoRef.current.srcObject = pinned.stream;
     }
@@ -102,8 +109,6 @@ const MeetingPage: React.FC = () => {
 
   const handleToggleAudio = async () => await toggleAudio(!localAudioEnabled);
   const handleToggleVideo = async () => await toggleVideo(!localVideoEnabled);
-  const handleToggleChat = () => setIsChatOpen(!isChatOpen);
-  const handleShowTasks = () => setShowTasks(!showTasks);
   const handleShareScreen = async () => {
     try {
       await startScreenShare();
@@ -113,38 +118,33 @@ const MeetingPage: React.FC = () => {
   };
 
   const confirmLeaveMeeting = () => navigate('/');
-  const handleLeaveMeeting = () => setShowConfirmLeave(true);
-  const handleShowParticipants = () => setShowParticipantsModal(true);
+  const handleLeaveMeeting = () => setIsLeaveModalVisible(true);
+  const handleShowParticipants = () => setParticipantsDrawerOpen(true);
+  const handleShowChat = () => setIsChatDrawerOpen(true);
+  const handleShowInfo = () => setIsInfoDrawerOpen(true);
+
   const handlePinParticipant = (userId: string) => {
     setPinnedParticipantId(userId === pinnedParticipantId ? null : userId);
   };
 
   const renderMainView = () => {
-    const pinned = participants.find((p) => p.userId === pinnedParticipantId);
+    const pinned = participants.find(p => p.userId === pinnedParticipantId);
 
-    if (pinned) {
-      if (pinned.videoEnabled && pinned.stream) {
-        return (
-          <div className="relative w-full h-full">
-            <video
-              ref={pinnedVideoRef}
-              autoPlay
-              muted={pinned.userId === 'local'}
-              playsInline
-              className="w-full h-full object-cover rounded-xl"
-            />
-            <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
-              {pinned.name} {pinned.userId === 'local' ? '(You)' : ''}
-            </div>
+    if (pinned?.videoEnabled && pinned?.stream) {
+      return (
+        <div className="relative w-full h-full">
+          <video
+            ref={pinnedVideoRef}
+            autoPlay
+            muted={pinned.userId === 'local'}
+            playsInline
+            className="w-full h-full object-cover rounded-xl scale-x-[-1]"
+          />
+          <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
+            {pinned.name} {pinned.userId === 'local' ? '(You)' : ''}
           </div>
-        );
-      } else {
-        return (
-          <div className="flex items-center justify-center h-full text-white text-5xl font-bold bg-blue-400 rounded-xl">
-            <Avatar name={pinned.name} size="xl" />
-          </div>
-        );
-      }
+        </div>
+      );
     }
 
     if (localStream && localVideoEnabled) {
@@ -155,7 +155,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted
             playsInline
-            className="w-full h-full object-cover rounded-xl"
+            className="w-full h-full object-cover rounded-xl transform scale-x-[-1]"
           />
           <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
             {displayName} (You)
@@ -165,47 +165,16 @@ const MeetingPage: React.FC = () => {
     }
 
     return (
-      <div className="flex items-center justify-center h-full text-white text-5xl font-bold bg-blue-400 rounded-xl">
+      <div className="flex items-center justify-center h-full text-white text-5xl font-bold bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 rounded-xl">
         <Avatar name={displayName} size="xl" />
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-800 p-2 fixed top-0 left-0 right-0">
-      {/* Info Icon with Title Hover */}
-      <div className="absolute top-4 right-4 z-50 group">
-        <div className="flex items-center space-x-2 cursor-pointer">
-          <div className="bg-slate-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all duration-300 group-hover:w-48 group-hover:rounded-full group-hover:justify-start px-2 bg-opacity-70 overflow-hidden">
-            <span className="ml-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              {title}
-            </span>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex flex-col h-screen bg-gray-950 p-2 fixed top-0 left-0 right-0">
       <div className="flex flex-1 space-x-6 overflow-hidden relative">
-        {/* Chat Panel */}
-        {isChatOpen && (
-          <div className="absolute top-4 left-4 w-96 h-[80vh] z-50 bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-gray-200">
-            <div className="flex justify-between items-center bg-gray-100 px-4 py-2 border-b border-gray-300">
-              <h2 className="text-md font-semibold text-gray-800">Chat</h2>
-              <button onClick={() => setIsChatOpen(false)} className="text-gray-500 hover:text-red-600 text-xl">×</button>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <ChatPanel />
-            </div>
-          </div>
-        )}
-
-        {/* Task List */}
-        {showTasks && (
-          <div className="absolute top-4 left-4 w-80 h-[80vh] z-50">
-            <TaskList onClose={() => setShowTasks(false)} />
-          </div>
-        )}
-
-        {/* Participants */}
+        {/* Left Thumbnails */}
         <div className="flex flex-col w-82 max-h-[80vh] overflow-y-auto scrollbar-hide">
           <div className="grid grid-cols-2 p-1 gap-4">
             {participants.map((participant) => (
@@ -224,52 +193,121 @@ const MeetingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Participants Modal */}
-        <Modal isOpen={showParticipantsModal} onClose={() => setShowParticipantsModal(false)} title="Participants">
-          <div className="max-h-[300px] overflow-y-auto px-4 py-2 space-y-2">
-            {participants.map((participant) => (
-              <div key={participant.userId} className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between">
-                <span>{participant.name}{participant.userId === 'local' ? ' (You)' : ''}</span>
-                <span className="text-xs text-gray-500">{participant.audioEnabled ? '🎤' : '🔇'} {participant.videoEnabled ? '🎥' : '🚫'}</span>
-              </div>
-            ))}
-          </div>
-        </Modal>
-
-        {/* Main Video View */}
+        {/* Main View */}
         <div className="flex-1 flex flex-col rounded-xl overflow-hidden bg-gray-100 shadow-lg relative">
+          {/* Info Badge Centered */}
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 group">
+            <div className="flex items-center space-x-2 cursor-pointer">
+              <div className="bg-slate-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all duration-300 group-hover:w-48 group-hover:justify-start px-2 bg-opacity-70 overflow-hidden">
+                <span className="text-sm rounded-full">ℹ️</span>
+                <span className="ml-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  {title}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {renderMainView()}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 bg-black bg-opacity-30 rounded-full p-1 shadow-lg">
+
+          {/* Controls */}
+          <div className="absolute px-3 bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 bg-gray-100 bg-opacity-30 rounded-full p-1 shadow-lg">
             <MeetingControls
               audioEnabled={localAudioEnabled}
               videoEnabled={localVideoEnabled}
-              isChatOpen={isChatOpen}
+              isChatOpen={isChatDrawerOpen}
               participantCount={participants.length}
               meetingTime={formatTime(meetingTime)}
               displayName={displayName}
               onToggleAudio={handleToggleAudio}
               onToggleVideo={handleToggleVideo}
-              onToggleChat={handleToggleChat}
+              onToggleChat={handleShowChat}
               onShareScreen={handleShareScreen}
               onLeaveMeeting={handleLeaveMeeting}
               onShowParticipants={handleShowParticipants}
-              onMoreOptions={handleShowTasks}
+              onMoreOptions={handleShowInfo}
               className="flex-row space-x-4 bg-transparent shadow-none p-0"
             />
           </div>
         </div>
       </div>
 
-      {/* Leave Confirmation Modal */}
-      <Modal isOpen={showConfirmLeave} onClose={() => setShowConfirmLeave(false)} title="Leave Meeting">
-        <div className="text-center">
-          <p className="mb-4">Are you sure you want to leave this meeting?</p>
-          <div className="flex space-x-3 justify-center">
-            <Button variant="outline" onClick={() => setShowConfirmLeave(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmLeaveMeeting}>Leave</Button>
-          </div>
+      {/* Chat Drawer */}
+      <Drawer
+        title="Chat"
+        placement="right"
+        onClose={() => setIsChatDrawerOpen(false)}
+        open={isChatDrawerOpen}
+        width={350}
+      >
+        <ChatPanel />
+      </Drawer>
+
+      {/* More Info Drawer (Tasks) */}
+      <Drawer
+        title={null} // Optional: remove header if TaskList has its own
+        placement="right"
+        onClose={() => setIsInfoDrawerOpen(false)}
+        open={isInfoDrawerOpen}
+        width={350} // or a fixed width like 600
+        bodyStyle={{ padding: 0, height: "100%" }} // remove padding
+        closable={false} // optional: if TaskList has its own close button
+      >
+        <div style={{ height: "100%" }}>
+          <TaskList onClose={() => setIsInfoDrawerOpen(false)} />
         </div>
+      </Drawer>
+
+
+      {/* Participants Drawer */}
+      <Drawer
+        title="Participants"
+        placement="right"
+        onClose={() => setParticipantsDrawerOpen(false)}
+        open={participantsDrawerOpen}
+        width={320}
+      >
+        <div className="space-y-3">
+          {participants.map((participant) => (
+            <div
+              key={participant.userId}
+              className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between"
+            >
+              <span>
+                {participant.name}
+                {participant.userId === 'local' ? ' (You)' : ''}
+              </span>
+              <span className="text-xs text-gray-500">
+                {participant.audioEnabled ? '🎤' : '🔇'}{' '}
+                {participant.videoEnabled ? '🎥' : '🚫'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Drawer>
+
+      {/* Leave Meeting Drawer */}
+      <Modal
+        title="Leave Meeting"
+        open={isLeaveModalVisible}
+        onCancel={() => setIsLeaveModalVisible(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <Button
+              key="cancel"
+              variant="outline"
+              onClick={() => setIsLeaveModalVisible(false)}
+            >
+              Cancel
+            </Button>
+            <Button key="leave" variant="danger" onClick={confirmLeaveMeeting}>
+              Leave
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-center mb-0">Are you sure you want to leave this meeting?</p>
       </Modal>
+
     </div>
   );
 };

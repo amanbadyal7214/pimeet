@@ -37,18 +37,18 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
 }) => {
   return (
     <div className={twMerge('flex flex-col items-center bg-white rounded-t-lg shadow-lg p-3', className)}>
-      <div className="flex items-center justify-between w-full mb-2">
-        <div className="text-sm text-gray-600">{meetingTime}</div>
+      <div className="flex  items-center justify-between w-full mb-2">
+        <div className="text-sm text-black">{meetingTime}</div>
         <button 
           onClick={onShowParticipants}
-          className="flex items-center text-sm text-gray-600 hover:text-blue-600"
+          className="flex items-center text-sm text-black hover:text-blue-600"
         >
           <Users size={16} className="mr-1" />
           <span>{participantCount}</span>
         </button>
       </div>
       {displayName && (
-        <div className="text-sm text-gray-700 mb-2 w-full text-center font-semibold">
+        <div className="text-sm text-black mb-2 w-full text-center font-semibold">
           You: {displayName}
         </div>
       )}

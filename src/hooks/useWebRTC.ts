@@ -38,7 +38,7 @@ export function useWebRTC(roomId: string) {
 
     const connect = async () => {
       try {
-        const displayName = new URLSearchParams(window.location.search).get('name') || 'Guest';
+        const displayName = new URLSearchParams(window.location.search).get('name') || 'Host';
         const stream = await webRTCRef.current?.joinRoom(displayName);
         if (stream) {
           setLocalStream(new MediaStream(stream.getTracks()));

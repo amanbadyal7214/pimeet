@@ -26,7 +26,7 @@ const TaskList: React.FC<TaskListProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl p-4 text-white w-72 h-full relative">
+    <div className="bg-gray-800  p-4 text-white w-full h-full relative">
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-semibold text-lg">Daily Task</h3>
