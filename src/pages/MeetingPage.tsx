@@ -52,6 +52,8 @@ const MeetingPage: React.FC = () => {
     localVideoEnabled,
   } = useWebRTC(meetingId || '');
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   useEffect(() => {
     const interval = setInterval(() => setMeetingTime(prev => prev + 1), 1000);
     return () => clearInterval(interval);
@@ -107,6 +109,21 @@ const MeetingPage: React.FC = () => {
     }
   }, [localStream]);
 
+  const enterFullscreen = () => {
+    const el = pinnedVideoRef.current || localVideoRef.current;
+    if (el?.requestFullscreen) el.requestFullscreen();
+    else if ((el as any)?.webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
+    else if ((el as any)?.msRequestFullscreen) (el as any).msRequestFullscreen();
+  };
+
+  useEffect(() => {
+    if (isMobile) {
+      setTimeout(() => {
+        enterFullscreen();
+      }, 1500);
+    }
+  }, [localStream, pinnedParticipantId]);
+
   const handleToggleAudio = async () => await toggleAudio(!localAudioEnabled);
   const handleToggleVideo = async () => await toggleVideo(!localVideoEnabled);
   const handleShareScreen = async () => {
@@ -140,6 +157,14 @@ const MeetingPage: React.FC = () => {
             playsInline
             className="w-full h-screen object-cover rounded-xl scale-x-[-1]"
           />
+          {isMobile && (
+            <button
+              onClick={enterFullscreen}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm"
+            >
+              Fullscreen
+            </button>
+          )}
           <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
             {pinned.name} {pinned.userId === 'local' ? '(You)' : ''}
           </div>
@@ -157,6 +182,14 @@ const MeetingPage: React.FC = () => {
             playsInline
             className="w-full h-screen object-cover rounded-xl transform scale-x-[-1]"
           />
+          {isMobile && (
+            <button
+              onClick={enterFullscreen}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm"
+            >
+              Fullscreen
+            </button>
+          )}
           <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
             {displayName} (You)
           </div>
@@ -178,7 +211,7 @@ const MeetingPage: React.FC = () => {
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 group">
             <div className="flex items-center space-x-2 cursor-pointer">
               <div className="bg-slate-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all duration-300 group-hover:w-48 group-hover:justify-start px-2 bg-opacity-70 overflow-hidden">
-                <span className="text-sm rounded-full">\u2139\ufe0f</span>
+                <span className="text-sm rounded-full">ℹ️</span>
                 <span className="ml-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   {title}
                 </span>
