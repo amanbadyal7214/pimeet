@@ -95,9 +95,29 @@ io.on('connection', (socket) => {
       candidate,
     });
   });
+
+  // 💬 Chat message — now sends to both others AND the sender
+  socket.on('chat-message', ({ roomId, message, sender }) => {
+    if (!roomId || !message || !sender) return;
+
+    console.log(`💬 Message from ${sender} in room ${roomId}: ${message}`);
+
+    const payload = {
+      userId: socket.id,
+      sender,
+      message,
+      timestamp: Date.now(),
+    };
+
+    // Send to others
+    socket.to(roomId).emit('chat-message', payload);
+
+    // Send to sender
+    socket.emit('chat-message', payload);
+  });
 });
 
-
+// Handle user leaving
 function handleUserLeaveRoom(socket, roomId) {
   const room = rooms.get(roomId);
   if (room) {

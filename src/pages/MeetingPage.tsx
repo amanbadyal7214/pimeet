@@ -116,14 +116,6 @@ const MeetingPage: React.FC = () => {
     else if ((el as any)?.msRequestFullscreen) (el as any).msRequestFullscreen();
   };
 
-  useEffect(() => {
-    if (isMobile) {
-      setTimeout(() => {
-        enterFullscreen();
-      }, 1500);
-    }
-  }, [localStream, pinnedParticipantId]);
-
   const handleToggleAudio = async () => await toggleAudio(!localAudioEnabled);
   const handleToggleVideo = async () => await toggleVideo(!localVideoEnabled);
   const handleShareScreen = async () => {
@@ -155,7 +147,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted={pinned.userId === 'local'}
             playsInline
-            className="w-full h-screen object-cover rounded-xl scale-x-[-1]"
+            className="w-full h-screen object-cover rounded-xl "
           />
           {isMobile && (
             <button
@@ -180,7 +172,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted
             playsInline
-            className="w-full h-screen object-cover rounded-xl transform scale-x-[-1]"
+            className="w-full h-screen object-cover rounded-xl transform "
           />
           {isMobile && (
             <button

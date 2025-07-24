@@ -49,7 +49,7 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className="absolute inset-0 w-full h-full object-cover rounded-xl scale-x-[-1]"
+          className="absolute inset-0 w-full h-full object-cover rounded-xl "
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 flex items-center justify-center rounded-xl">
