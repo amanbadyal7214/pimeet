@@ -24,6 +24,7 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   isPinned = false,
 }) => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const audioRef = React.useRef<HTMLAudioElement>(null);
 
   React.useEffect(() => {
     if (videoRef.current) {
@@ -35,6 +36,17 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       }
     }
   }, [videoStream, videoEnabled]);
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      if (audioEnabled && videoStream) {
+        audioRef.current.srcObject = videoStream;
+        audioRef.current.play().catch(() => {});
+      } else {
+        audioRef.current.srcObject = null;
+      }
+    }
+  }, [videoStream, audioEnabled]);
 
   return (
     <div
@@ -56,6 +68,9 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
           <Avatar name={name} size="lg" />
         </div>
       )}
+
+      {/* Audio element for audio playback */}
+      <audio ref={audioRef} autoPlay muted={isLocal || !audioEnabled} />
 
       {/* Footer Overlay */}
       <div className="relative z-10 text-white">
@@ -83,8 +98,8 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
 
         {/* Mic & Camera Status */}
         <div className="flex space-x-2 mt-1">
-          {!audioEnabled && <MicOff className="w-4 h-4 text-red-500" title="Mic Off" />}
-          {!videoEnabled && <VideoOff className="w-4 h-4 text-red-500" title="Video Off" />}
+          {!audioEnabled && <MicOff className="w-4 h-4 text-red-500" aria-label="Mic Off" />}
+          {!videoEnabled && <VideoOff className="w-4 h-4 text-red-500" aria-label="Video Off" />}
         </div>
       </div>
     </div>

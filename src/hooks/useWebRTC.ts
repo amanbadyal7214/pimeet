@@ -109,8 +109,10 @@ export function useWebRTC(roomId: string) {
 
   const toggleAudio = async (enabled: boolean) => {
     try {
+      console.log('Toggling audio:', enabled);
       await webRTCRef.current?.toggleAudio(enabled);
       setLocalAudioEnabled(enabled);
+      console.log('Emitting user-status-update with audioEnabled:', enabled, 'videoEnabled:', localVideoEnabled);
       socketRef.current?.emit('user-status-update', {
         audioEnabled: enabled,
         videoEnabled: localVideoEnabled,
@@ -122,8 +124,10 @@ export function useWebRTC(roomId: string) {
 
   const toggleVideo = async (enabled: boolean) => {
     try {
+      console.log('Toggling video:', enabled);
       await webRTCRef.current?.toggleVideo(enabled);
       setLocalVideoEnabled(enabled);
+      console.log('Emitting user-status-update with audioEnabled:', localAudioEnabled, 'videoEnabled:', enabled);
       socketRef.current?.emit('user-status-update', {
         audioEnabled: localAudioEnabled,
         videoEnabled: enabled,

@@ -108,36 +108,86 @@ export class WebRTCService {
     return this.localStream;
   }
 
+  private blankVideoTrack: MediaStreamTrack | null = null;
+
+  private createBlankVideoTrack(): MediaStreamTrack {
+    if (this.blankVideoTrack) return this.blankVideoTrack;
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    const stream = canvas.captureStream();
+    this.blankVideoTrack = stream.getVideoTracks()[0];
+    return this.blankVideoTrack;
+  }
+
   public async toggleVideo(enabled: boolean) {
     if (!this.localStream) return;
 
-    const oldTrack = this.localStream.getVideoTracks()[0];
+    // Preserve audio tracks
+    const audioTracks = this.localStream.getAudioTracks();
+
     if (!enabled) {
+      // Replace current video track with blank video track to simulate video off
       const blankTrack = this.createBlankVideoTrack();
-      this.replaceTrack(oldTrack, blankTrack);
-      this.localStream.removeTrack(oldTrack);
-      oldTrack.stop();
+      if (this.currentVideoTrack) {
+        this.peerConnections.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track === this.currentVideoTrack);
+          if (sender) sender.replaceTrack(blankTrack);
+        });
+        this.localStream.removeTrack(this.currentVideoTrack);
+      }
       this.localStream.addTrack(blankTrack);
-      this.currentVideoTrack = null;
+      this.currentVideoTrack = blankTrack;
     } else {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      const realTrack = stream.getVideoTracks()[0];
-      const currentTrack = this.localStream.getVideoTracks()[0];
-      this.replaceTrack(currentTrack, realTrack);
-      this.localStream.removeTrack(currentTrack);
-      currentTrack.stop();
-      this.localStream.addTrack(realTrack);
-      this.currentVideoTrack = realTrack;
+      // Restore real video track
+      if (this.currentVideoTrack && this.currentVideoTrack === this.blankVideoTrack) {
+        this.localStream.removeTrack(this.blankVideoTrack!);
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const realTrack = stream.getVideoTracks()[0];
+        this.currentVideoTrack = realTrack;
+        this.localStream.addTrack(realTrack);
+        this.peerConnections.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track === this.blankVideoTrack);
+          if (sender) sender.replaceTrack(realTrack);
+        });
+      } else if (!this.currentVideoTrack) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const realTrack = stream.getVideoTracks()[0];
+        this.currentVideoTrack = realTrack;
+        this.localStream.addTrack(realTrack);
+        this.peerConnections.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(realTrack);
+        });
+      }
     }
 
-    // 🔁 Return updated stream reference
+    // Re-add audio tracks to localStream if missing
+    audioTracks.forEach(track => {
+      if (!this.localStream!.getAudioTracks().includes(track)) {
+        this.localStream!.addTrack(track);
+      }
+    });
+
+    // Emit updated stream
     const newStream = new MediaStream(this.localStream.getTracks());
     this.onRemoteStream?.('local', newStream);
   }
 
   public async toggleAudio(enabled: boolean) {
     if (!this.localStream) return;
-    this.localStream.getAudioTracks().forEach(t => t.enabled = enabled);
+    this.localStream.getAudioTracks().forEach(t => {
+      t.enabled = enabled;
+      // Also mute/unmute the track explicitly if supported
+      if ('muted' in t) {
+        (t as any).muted = !enabled;
+      }
+    });
     const updated = new MediaStream(this.localStream.getTracks());
     this.onRemoteStream?.('local', updated);
   }
@@ -181,11 +231,17 @@ export class WebRTCService {
   private replaceTrack(oldTrack: MediaStreamTrack, newTrack: MediaStreamTrack) {
     this.peerConnections.forEach(pc => {
       const sender = pc.getSenders().find(s => s.track === oldTrack);
-      if (sender) sender.replaceTrack(newTrack);
+      if (sender) {
+        console.log(`Replacing track in peer connection for user: ${[...this.peerConnections.entries()].find(([_, v]) => v === pc)?.[0]}`);
+        console.log('Old track:', oldTrack);
+        console.log('New track:', newTrack);
+        sender.replaceTrack(newTrack);
+      }
     });
   }
 
   private createBlankVideoTrack(): MediaStreamTrack {
+    if (this.blankVideoTrack) return this.blankVideoTrack;
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 480;
@@ -195,7 +251,8 @@ export class WebRTCService {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     const stream = canvas.captureStream();
-    return stream.getVideoTracks()[0];
+    this.blankVideoTrack = stream.getVideoTracks()[0];
+    return this.blankVideoTrack;
   }
 
   public disconnect() {
