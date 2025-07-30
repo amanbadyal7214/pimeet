@@ -31,6 +31,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
     if (!socketInstance) return;
 
     const handleIncomingMessage = (payload: ChatMessagePayload) => {
+      if (payload.sender === sender) {
+        // Ignore own message to avoid duplicate
+        return;
+      }
       setMessages((prevMessages) => [
         ...prevMessages,
         { sender: payload.sender, text: payload.message },
