@@ -1,19 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { SocketService } from '../../services/socket';
+import { Socket } from 'socket.io-client';
 
 interface Message {
   sender: string;
   text: string;
 }
 
-const ChatPanel: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface ChatPanelProps {
+  roomId: string;
+  sender: string;
+}
 
+interface ChatMessagePayload {
+  userId: string;
+  sender: string;
+  message: string;
+  timestamp: number;
+}
+
+const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [socket, setSocket] = useState<Socket | null>(null);
+
+  useEffect(() => {
+    const socketInstance = SocketService.getInstance().getSocket();
+    setSocket(socketInstance);
+
+    if (!socketInstance) return;
+
+    const handleIncomingMessage = (payload: ChatMessagePayload) => {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { sender: payload.sender, text: payload.message },
+      ]);
+    };
+
+    socketInstance.on('chat-message', handleIncomingMessage);
+
+    return () => {
+      socketInstance.off('chat-message', handleIncomingMessage);
+    };
+  }, []);
 
   const handleSendMessage = () => {
     if (newMessage.trim() === '') return;
 
-    setMessages([...messages, { sender: 'You', text: newMessage.trim() }]);
+    if (socket) {
+      socket.emit('chat-message', {
+        roomId,
+        message: newMessage.trim(),
+        sender,
+      });
+    }
+
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      { sender: 'You', text: newMessage.trim() },
+    ]);
     setNewMessage('');
   };
 

@@ -15,6 +15,8 @@ import ParticipantThumbnail from '../components/meeting/ParticipantThumbnail';
 import TaskList from '../components/meeting/TaskList';
 import Avatar from '../components/ui/Avatar';
 import { Drawer, Modal } from 'antd';
+import { SocketService } from '../services/socket';
+
 
 const MeetingPage: React.FC = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -39,6 +41,11 @@ const MeetingPage: React.FC = () => {
 
   const pinnedVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const socketUrl = 'http://localhost:3001'; // Adjust if needed
+    SocketService.getInstance().connect(socketUrl);
+  }, []);
 
   const {
     localStream,
@@ -250,9 +257,9 @@ const MeetingPage: React.FC = () => {
         </div>
       </div>
 
-      <Drawer title="Chat" placement="right" onClose={() => setIsChatDrawerOpen(false)} open={isChatDrawerOpen} width={window.innerWidth < 600 ? 280 : 350}>
-        <ChatPanel />
-      </Drawer>
+<Drawer title="Chat" placement="right" onClose={() => setIsChatDrawerOpen(false)} open={isChatDrawerOpen} width={window.innerWidth < 600 ? 280 : 350}>
+  <ChatPanel roomId={meetingId || ''} sender={displayName} />
+</Drawer>
 
       <Drawer title={null} placement="right" onClose={() => setIsInfoDrawerOpen(false)} open={isInfoDrawerOpen} width={window.innerWidth < 600 ? 280 : 350} bodyStyle={{ padding: 0, height: "100%" }} closable={false}>
         <div style={{ height: "100%" }}>
