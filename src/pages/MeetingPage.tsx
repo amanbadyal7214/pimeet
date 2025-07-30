@@ -43,7 +43,7 @@ const MeetingPage: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    const socketUrl = 'http://localhost:3001'; // Adjust if needed
+    const socketUrl = 'https://pi.comsdesk.com'; // Adjust if needed
     SocketService.getInstance().connect(socketUrl);
   }, []);
 
