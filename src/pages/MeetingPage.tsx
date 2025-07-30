@@ -238,23 +238,43 @@ const MeetingPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-full md:w-80 max-h-[40vh] md:max-h-[80vh] overflow-hidden md:overflow-y-auto scrollbar-hide p-1">
-          <div className="grid grid-cols-2 grid-rows-2 gap-3">
-            {participants.slice(0, 4).map((participant) => (
-              <ParticipantThumbnail
-                key={participant.userId}
-                name={participant.name}
-                role={participant.role}
-                videoStream={participant.stream}
-                videoEnabled={participant.videoEnabled}
-                audioEnabled={participant.audioEnabled}
-                isLocal={participant.userId === 'local'}
-                onPin={() => handlePinParticipant(participant.userId)}
-                isPinned={pinnedParticipantId === participant.userId}
-              />
-            ))}
-          </div>
-        </div>
+      <div className="w-full md:w-80 max-h-[40vh] md:max-h-[80vh] p-1">
+  {/* Small screen: horizontal scroll */}
+  <div className="md:hidden flex space-x-3 overflow-x-auto scrollbar-hide">
+    {participants.map((participant) => (
+      <div key={participant.userId} className="flex-shrink-0 w-40">
+        <ParticipantThumbnail
+          name={participant.name}
+          role={participant.role}
+          videoStream={participant.stream}
+          videoEnabled={participant.videoEnabled}
+          audioEnabled={participant.audioEnabled}
+          isLocal={participant.userId === 'local'}
+          onPin={() => handlePinParticipant(participant.userId)}
+          isPinned={pinnedParticipantId === participant.userId}
+        />
+      </div>
+    ))}
+  </div>
+
+  {/* Medium and larger screen: grid layout */}
+  <div className="hidden md:grid grid-cols-2 grid-rows-2 gap-3">
+    {participants.slice(0, 4).map((participant) => (
+      <ParticipantThumbnail
+        key={participant.userId}
+        name={participant.name}
+        role={participant.role}
+        videoStream={participant.stream}
+        videoEnabled={participant.videoEnabled}
+        audioEnabled={participant.audioEnabled}
+        isLocal={participant.userId === 'local'}
+        onPin={() => handlePinParticipant(participant.userId)}
+        isPinned={pinnedParticipantId === participant.userId}
+      />
+    ))}
+  </div>
+</div>
+
       </div>
 
 <Drawer title="Chat" placement="right" onClose={() => setIsChatDrawerOpen(false)} open={isChatDrawerOpen} width={window.innerWidth < 600 ? 280 : 350}>
