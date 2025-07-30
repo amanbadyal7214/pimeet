@@ -183,10 +183,6 @@ export class WebRTCService {
     if (!this.localStream) return;
     this.localStream.getAudioTracks().forEach(t => {
       t.enabled = enabled;
-      // Also mute/unmute the track explicitly if supported
-      if ('muted' in t) {
-        (t as any).muted = !enabled;
-      }
     });
     const updated = new MediaStream(this.localStream.getTracks());
     this.onRemoteStream?.('local', updated);
