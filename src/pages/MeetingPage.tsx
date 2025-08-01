@@ -154,7 +154,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted={pinned.userId === 'local'}
             playsInline
-            className="w-full h-screen object-cover rounded-xl "
+            className="w-full h-screen object-cover rounded-xl scale-x-[-1]"
           />
           {isMobile && (
             <button
@@ -179,7 +179,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted
             playsInline
-            className="w-full h-screen object-cover rounded-xl transform "
+            className="w-full h-screen object-cover rounded-xl scale-x-[-1] "
           />
           {isMobile && (
             <button
