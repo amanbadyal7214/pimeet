@@ -103,6 +103,16 @@ const MeetingPage: React.FC = () => {
     localVideoEnabled,
   ]);
 
+  // New useEffect to detect new participant join and open chat drawer
+  const prevParticipantsCountRef = React.useRef(participants.length);
+
+  useEffect(() => {
+    if (participants.length > prevParticipantsCountRef.current) {
+      setIsChatDrawerOpen(true);
+    }
+    prevParticipantsCountRef.current = participants.length;
+  }, [participants]);
+
   useEffect(() => {
     const pinned = participants.find(p => p.userId === pinnedParticipantId);
     if (pinned?.videoEnabled && pinned?.stream && pinnedVideoRef.current) {
