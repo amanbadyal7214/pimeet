@@ -7,6 +7,7 @@ export class WebRTCService {
   private roomId: string;
   private onRemoteStream: ((userId: string, stream: MediaStream) => void) | null = null;
   private currentVideoTrack: MediaStreamTrack | null = null;
+  private blankVideoTrack: MediaStreamTrack | null = null;
 
   constructor(socket: Socket, roomId: string, onRemoteStream?: (userId: string, stream: MediaStream) => void) {
     this.socket = socket;
@@ -108,8 +109,6 @@ export class WebRTCService {
     return this.localStream;
   }
 
-  private blankVideoTrack: MediaStreamTrack | null = null;
-
   private createBlankVideoTrack(): MediaStreamTrack {
     if (this.blankVideoTrack) return this.blankVideoTrack;
     const canvas = document.createElement('canvas');
@@ -190,65 +189,121 @@ export class WebRTCService {
 
   public async startScreenShare(): Promise<MediaStream> {
     if (!this.localStream) throw new Error('No local stream');
-    const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
-    const screenTrack = screen.getVideoTracks()[0];
+    
+    try {
+      // Check if getDisplayMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Screen sharing is not supported on this device/browser');
+      }
 
-    this.peerConnections.forEach(pc => {
-      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(screenTrack);
-    });
-
-    this.localStream.getVideoTracks().forEach(t => {
-      this.localStream!.removeTrack(t);
-      t.stop();
-    });
-
-    this.localStream.addTrack(screenTrack);
-    this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
-
-    screenTrack.onended = async () => {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: true });
-      const camTrack = cam.getVideoTracks()[0];
+      // Mobile-specific handling
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      let screen: MediaStream;
+      
+      if (isMobile) {
+        // Mobile devices - use optimized settings
+        const constraints = {
+          video: {
+            frameRate: { ideal: 15, max: 30 },
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+          } as MediaTrackConstraints,
+          audio: true, // Include audio for mobile
+        };
+        
+        try {
+          screen = await navigator.mediaDevices.getDisplayMedia(constraints);
+        } catch (error) {
+          console.error('Mobile screen share failed:', error);
+          
+          // Fallback for iOS Safari
+          if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+            alert('Screen sharing on iOS requires iOS 15+ and may need to be enabled in Settings > Safari > Advanced > Experimental Features');
+          }
+          throw error;
+        }
+      } else {
+        // Desktop - use original settings
+        screen = await navigator.mediaDevices.getDisplayMedia({ 
+          video: true,
+          audio: true 
+        });
+      }
+      
+      const screenTrack = screen.getVideoTracks()[0];
 
       this.peerConnections.forEach(pc => {
         const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) sender.replaceTrack(camTrack);
+        if (sender) sender.replaceTrack(screenTrack);
       });
 
-      this.localStream!.removeTrack(screenTrack);
-      screenTrack.stop();
-      this.localStream!.addTrack(camTrack);
-      this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
-    };
+      this.localStream.getVideoTracks().forEach(t => {
+        this.localStream!.removeTrack(t);
+        t.stop();
+      });
 
-    return screen;
+      this.localStream.addTrack(screenTrack);
+      this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
+
+      screenTrack.onended = async () => {
+        try {
+          const cam = await navigator.mediaDevices.getUserMedia({ video: true });
+          const camTrack = cam.getVideoTracks()[0];
+
+          this.peerConnections.forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) sender.replaceTrack(camTrack);
+          });
+
+          this.localStream!.removeTrack(screenTrack);
+          screenTrack.stop();
+          this.localStream!.addTrack(camTrack);
+          this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
+        } catch (error) {
+          console.error('Failed to restore camera after screen share:', error);
+        }
+      };
+
+      return screen;
+    } catch (error) {
+      console.error('Screen share error:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Screen sharing failed. ';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('NotAllowedError')) {
+          errorMessage += 'Please allow screen recording permission.';
+        } else if (error.message.includes('NotFoundError')) {
+          errorMessage += 'No screen sources available.';
+        } else if (error.message.includes('NotSupportedError')) {
+          errorMessage += 'Your browser/device does not support screen sharing.';
+        } else {
+          errorMessage += error.message;
+        }
+      }
+      
+      // Show alert on mobile devices
+      if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        alert(errorMessage);
+      }
+      
+      throw new Error(errorMessage);
+    }
   }
 
   private replaceTrack(oldTrack: MediaStreamTrack, newTrack: MediaStreamTrack) {
     this.peerConnections.forEach(pc => {
       const sender = pc.getSenders().find(s => s.track === oldTrack);
       if (sender) {
-        console.log(`Replacing track in peer connection for user: ${[...this.peerConnections.entries()].find(([_, v]) => v === pc)?.[0]}`);
+        const userEntry = [...this.peerConnections.entries()].find(([_, v]) => v === pc);
+        console.log(`Replacing track in peer connection for user: ${userEntry?.[0] || 'unknown'}`);
         console.log('Old track:', oldTrack);
         console.log('New track:', newTrack);
         sender.replaceTrack(newTrack);
       }
     });
-  }
-
-  private createBlankVideoTrack(): MediaStreamTrack {
-    if (this.blankVideoTrack) return this.blankVideoTrack;
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    const stream = canvas.captureStream();
-    this.blankVideoTrack = stream.getVideoTracks()[0];
-    return this.blankVideoTrack;
   }
 
   public disconnect() {

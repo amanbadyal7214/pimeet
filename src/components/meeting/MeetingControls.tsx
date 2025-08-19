@@ -73,7 +73,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         
         <button
           onClick={onShareScreen}
-          className="p-3 rounded-full bg-gray-200 hover:bg-gray-300"
+          className="p-3 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+              ? 'Screen sharing on mobile - tap to start'
+              : 'Share your screen'
+          }
         >
           <ScreenShare size={20} />
         </button>
