@@ -127,11 +127,9 @@ export class WebRTCService {
   public async toggleVideo(enabled: boolean) {
     if (!this.localStream) return;
 
-    // Preserve audio tracks
     const audioTracks = this.localStream.getAudioTracks();
 
     if (!enabled) {
-      // Replace current video track with blank video track to simulate video off
       const blankTrack = this.createBlankVideoTrack();
       if (this.currentVideoTrack) {
         this.peerConnections.forEach(pc => {
@@ -143,7 +141,6 @@ export class WebRTCService {
       this.localStream.addTrack(blankTrack);
       this.currentVideoTrack = blankTrack;
     } else {
-      // Restore real video track
       if (this.currentVideoTrack && this.currentVideoTrack === this.blankVideoTrack) {
         this.localStream.removeTrack(this.blankVideoTrack!);
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -166,14 +163,12 @@ export class WebRTCService {
       }
     }
 
-    // Re-add audio tracks to localStream if missing
     audioTracks.forEach(track => {
       if (!this.localStream!.getAudioTracks().includes(track)) {
         this.localStream!.addTrack(track);
       }
     });
 
-    // Emit updated stream
     const newStream = new MediaStream(this.localStream.getTracks());
     this.onRemoteStream?.('local', newStream);
   }
@@ -189,48 +184,31 @@ export class WebRTCService {
 
   public async startScreenShare(): Promise<MediaStream> {
     if (!this.localStream) throw new Error('No local stream');
-    
+
     try {
-      // Check if getDisplayMedia is supported
+      // Detect if supported
+      const isMobile = /Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        throw new Error('Screen sharing is not supported on this device/browser');
+        if (isMobile) {
+          // Fallback: use camera instead of screen
+          alert("⚠️ Screen sharing is not supported on mobile browsers. Using camera instead.");
+          const cam = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          return cam;
+        } else {
+          throw new Error('Screen sharing is not supported on this device/browser');
+        }
       }
 
-      // Mobile-specific handling
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      let screen: MediaStream;
-      
-      if (isMobile) {
-        // Mobile devices - use optimized settings
-        const constraints = {
-          video: {
-            frameRate: { ideal: 15, max: 30 },
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
-          } as MediaTrackConstraints,
-          audio: true, // Include audio for mobile
-        };
-        
-        try {
-          screen = await navigator.mediaDevices.getDisplayMedia(constraints);
-        } catch (error) {
-          console.error('Mobile screen share failed:', error);
-          
-          // Fallback for iOS Safari
-          if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-            alert('Screen sharing on iOS requires iOS 15+ and may need to be enabled in Settings > Safari > Advanced > Experimental Features');
+      // If supported, start normally
+      const constraints = isMobile
+        ? {
+            video: { frameRate: { ideal: 15, max: 30 }, width: 1280, height: 720 },
+            audio: true,
           }
-          throw error;
-        }
-      } else {
-        // Desktop - use original settings
-        screen = await navigator.mediaDevices.getDisplayMedia({ 
-          video: true,
-          audio: true 
-        });
-      }
-      
+        : { video: true, audio: true };
+
+      const screen = await navigator.mediaDevices.getDisplayMedia(constraints);
       const screenTrack = screen.getVideoTracks()[0];
 
       this.peerConnections.forEach(pc => {
@@ -246,6 +224,7 @@ export class WebRTCService {
       this.localStream.addTrack(screenTrack);
       this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
 
+      // Restore camera when screen share ends
       screenTrack.onended = async () => {
         try {
           const cam = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -268,28 +247,7 @@ export class WebRTCService {
       return screen;
     } catch (error) {
       console.error('Screen share error:', error);
-      
-      // Provide user-friendly error messages
-      let errorMessage = 'Screen sharing failed. ';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('NotAllowedError')) {
-          errorMessage += 'Please allow screen recording permission.';
-        } else if (error.message.includes('NotFoundError')) {
-          errorMessage += 'No screen sources available.';
-        } else if (error.message.includes('NotSupportedError')) {
-          errorMessage += 'Your browser/device does not support screen sharing.';
-        } else {
-          errorMessage += error.message;
-        }
-      }
-      
-      // Show alert on mobile devices
-      if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        alert(errorMessage);
-      }
-      
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -297,10 +255,6 @@ export class WebRTCService {
     this.peerConnections.forEach(pc => {
       const sender = pc.getSenders().find(s => s.track === oldTrack);
       if (sender) {
-        const userEntry = [...this.peerConnections.entries()].find(([_, v]) => v === pc);
-        console.log(`Replacing track in peer connection for user: ${userEntry?.[0] || 'unknown'}`);
-        console.log('Old track:', oldTrack);
-        console.log('New track:', newTrack);
         sender.replaceTrack(newTrack);
       }
     });
