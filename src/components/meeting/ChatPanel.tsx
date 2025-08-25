@@ -51,7 +51,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
     let socketInstance = SocketService.getInstance().getSocket();
     if (!socketInstance) {
       // You may want to move this URL to a config file or env variable
-      socketInstance = SocketService.getInstance().connect('http://localhost:3001');
+      socketInstance = SocketService.getInstance().connect('https://pi.comsdesk.com');
     }
     setSocket(socketInstance);
   }, []);

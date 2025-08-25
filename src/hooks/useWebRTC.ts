@@ -21,7 +21,7 @@ export function useWebRTC(roomId: string) {
 
   useEffect(() => {
     const socketService = SocketService.getInstance();
-    const socket = socketService.connect('http://localhost:3001'); // Adjust URL as needed
+    const socket = socketService.connect('https://pi.comsdesk.com'); // Adjust URL as needed
     socketRef.current = socket;
 
     webRTCRef.current = new WebRTCService(socket, roomId, (userId, stream) => {
