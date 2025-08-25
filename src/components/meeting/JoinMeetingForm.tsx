@@ -8,6 +8,7 @@ const JoinMeetingForm: React.FC = () => {
   const navigate = useNavigate();
   const [meetingId, setMeetingId] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [studentId, setStudentId] = useState(''); // Will rename to id for clarity
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,11 +25,14 @@ const JoinMeetingForm: React.FC = () => {
       return;
     }
     
+    if (!studentId.trim()) {
+      setError('Please enter your ID');
+      return;
+    }
     setIsJoining(true);
-    
     // Simulate a brief loading state
     setTimeout(() => {
-      navigate(`/meeting/${meetingId}?name=${encodeURIComponent(displayName)}`);
+  navigate(`/meeting/${meetingId}?name=${encodeURIComponent(displayName)}&id=${encodeURIComponent(studentId)}`);
       setIsJoining(false);
     }, 1000);
   };
@@ -70,8 +74,18 @@ const JoinMeetingForm: React.FC = () => {
           required
         />
         
+        <Input
+          label="ID"
+          value={studentId}
+          onChange={(e) => {
+            setStudentId(e.target.value);
+            setError(null);
+          }}
+          placeholder="Enter your ID"
+          fullWidth
+          required
+        />
         {error && <p className="text-red-600 text-sm">{error}</p>}
-        
         <Button
           type="submit"
           variant="primary"

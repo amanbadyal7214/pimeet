@@ -29,6 +29,7 @@ const MeetingPage: React.FC = () => {
     meetingTitle?: string;
   };
   const displayName = state?.creatorName || searchParams.get('name') || 'Guest';
+  const studentId = searchParams.get('id') || '';
   const title = state?.meetingTitle || 'Untitled Meeting';
 
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
@@ -43,7 +44,7 @@ const MeetingPage: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    const socketUrl = 'https://pi.comsdesk.com'; // Adjust if needed
+    const socketUrl = 'http://localhost:3001'; // Adjust if needed
     SocketService.getInstance().connect(socketUrl);
   }, []);
 
@@ -70,7 +71,7 @@ const MeetingPage: React.FC = () => {
     const updated = [
       {
         userId: 'local',
-        name: displayName,
+        name: studentId ? `${displayName} (${studentId})` : displayName,
         role: 'You',
         audioEnabled: localAudioEnabled,
         videoEnabled: localVideoEnabled,
@@ -79,13 +80,21 @@ const MeetingPage: React.FC = () => {
     ];
 
     remoteUserDisplayNames.forEach((name, userId) => {
+      // Try to extract studentId from name if present (format: Name (ID))
+      let display = name;
+      let id = '';
+      const match = name.match(/^(.*) \((\d+)\)$/);
+      if (match) {
+        display = match[1];
+        id = match[2];
+      }
       const status = remoteUserStatus.get(userId) || {
         audioEnabled: true,
         videoEnabled: true,
       };
       updated.push({
         userId,
-        name,
+        name: id ? `${display} (${id})` : display,
         role: 'Participant',
         audioEnabled: status.audioEnabled,
         videoEnabled: status.videoEnabled,
@@ -208,7 +217,7 @@ const MeetingPage: React.FC = () => {
 
     return (
       <div className="flex items-center justify-center h-screen text-white text-5xl font-bold bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 rounded-xl">
-        <Avatar name={displayName} size="xl" />
+  <Avatar name={displayName} size="lg" />
       </div>
     );
   };

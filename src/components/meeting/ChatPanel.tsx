@@ -46,11 +46,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Ensure socket is connected (auto-connect if not already)
   useEffect(() => {
-    const socketInstance = SocketService.getInstance().getSocket();
+    let socketInstance = SocketService.getInstance().getSocket();
+    if (!socketInstance) {
+      // You may want to move this URL to a config file or env variable
+      socketInstance = SocketService.getInstance().connect('http://localhost:3001');
+    }
     setSocket(socketInstance);
+  }, []);
 
-    if (!socketInstance) return;
+  useEffect(() => {
+    if (!socket) return;
 
     const handleIncomingMessage = (payload: ChatMessagePayload) => {
       if (payload.sender === sender) {
@@ -63,12 +70,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
       ]);
     };
 
-    socketInstance.on('chat-message', handleIncomingMessage);
+    socket.on('chat-message', handleIncomingMessage);
 
     return () => {
-      socketInstance.off('chat-message', handleIncomingMessage);
+      socket.off('chat-message', handleIncomingMessage);
     };
-  }, [sender]);
+  }, [sender, socket]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
