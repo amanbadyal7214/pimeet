@@ -1,3 +1,9 @@
+// Extend window type for global trainer flag
+declare global {
+  interface Window {
+    __PI_MEET_IS_TRAINER?: boolean;
+  }
+}
 import React from 'react';
 import Avatar from '../ui/Avatar';
 import { MicOff, VideoOff, Pin } from 'lucide-react';
@@ -77,8 +83,11 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         <div className="flex justify-between items-center">
           <div>
             <div className="font-semibold">
-              {name}
-              {isLocal ? ' (You)' : ''}
+              {/* Hamesha sirf name dikhaye, ID na dikhaye */}
+              {(() => {
+                const match = name.match(/^(.*) \((\d+)\)$/);
+                return (match ? match[1] : name) + (isLocal ? ' (You)' : '');
+              })()}
             </div>
             <div className="text-xs text-gray-300">{role}</div>
           </div>
