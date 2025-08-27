@@ -30,7 +30,7 @@ const MeetingPage: React.FC = () => {
   const displayName =
     state?.creatorName || searchParams.get("name") || "Guest";
   const studentId = searchParams.get("id") || "";
-  const title = state?.meetingTitle || "Untitled Meeting";
+  const title = state?.meetingTitle || meetingId || "Untitled Meeting";
 
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
