@@ -29,6 +29,7 @@ const MeetingPage: React.FC = () => {
     meetingTitle?: string;
   };
   const displayName = state?.creatorName || searchParams.get('name') || 'Guest';
+  const studentId = searchParams.get('id') || '';
   const title = state?.meetingTitle || 'Untitled Meeting';
 
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
@@ -67,25 +68,37 @@ const MeetingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Set global flag for trainer
+    if (typeof window !== 'undefined') {
+      (window as any).__PI_MEET_IS_TRAINER = studentId === 'trainer';
+    }
     const updated = [
       {
         userId: 'local',
-        name: displayName,
-        role: 'You',
+        name: studentId ? `${displayName} (${studentId})` : displayName,
+        role: studentId === 'trainer' ? 'trainer' : 'You',
         audioEnabled: localAudioEnabled,
         videoEnabled: localVideoEnabled,
         stream: localStream || undefined,
       },
     ];
 
+    const isTrainer = studentId === 'trainer';
     remoteUserDisplayNames.forEach((name, userId) => {
+      let display = name;
+      let id = '';
+      const match = name.match(/^(.*) \((\d+)\)$/);
+      if (match) {
+        display = match[1];
+        id = match[2];
+      }
       const status = remoteUserStatus.get(userId) || {
         audioEnabled: true,
         videoEnabled: true,
       };
       updated.push({
         userId,
-        name,
+        name: isTrainer && id ? `${display} (${id})` : display,
         role: 'Participant',
         audioEnabled: status.audioEnabled,
         videoEnabled: status.videoEnabled,
@@ -93,6 +106,12 @@ const MeetingPage: React.FC = () => {
       });
     });
 
+    // Move trainer to the top if present
+    const trainerIndex = updated.findIndex(p => p.role === 'trainer');
+    if (trainerIndex > 0) {
+      const [trainer] = updated.splice(trainerIndex, 1);
+      updated.unshift(trainer);
+    }
     setParticipants(updated);
   }, [
     localStream,
@@ -102,6 +121,16 @@ const MeetingPage: React.FC = () => {
     localAudioEnabled,
     localVideoEnabled,
   ]);
+
+  // New useEffect to detect new participant join and open chat drawer
+  const prevParticipantsCountRef = React.useRef(participants.length);
+
+  useEffect(() => {
+    if (participants.length > prevParticipantsCountRef.current) {
+      setIsChatDrawerOpen(true);
+    }
+    prevParticipantsCountRef.current = participants.length;
+  }, [participants]);
 
   useEffect(() => {
     const pinned = participants.find(p => p.userId === pinnedParticipantId);
@@ -198,7 +227,7 @@ const MeetingPage: React.FC = () => {
 
     return (
       <div className="flex items-center justify-center h-screen text-white text-5xl font-bold bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 rounded-xl">
-        <Avatar name={displayName} size="xl" />
+  <Avatar name={displayName} size="lg" />
       </div>
     );
   };
@@ -241,9 +270,32 @@ const MeetingPage: React.FC = () => {
       <div className="w-full md:w-80 max-h-[40vh] md:max-h-[80vh] p-1">
   {/* Small screen: horizontal scroll */}
   <div className="md:hidden flex space-x-3 overflow-x-auto scrollbar-hide">
-    {participants.map((participant) => (
-      <div key={participant.userId} className="flex-shrink-0 w-40">
+    {[...participants]
+      .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
+      .map((participant) => (
+        <div key={participant.userId} className="flex-shrink-0 w-40">
+          <ParticipantThumbnail
+            name={participant.name}
+            role={participant.role}
+            videoStream={participant.stream}
+            videoEnabled={participant.videoEnabled}
+            audioEnabled={participant.audioEnabled}
+            isLocal={participant.userId === 'local'}
+            onPin={() => handlePinParticipant(participant.userId)}
+            isPinned={pinnedParticipantId === participant.userId}
+          />
+        </div>
+      ))}
+  </div>
+
+  {/* Medium and larger screen: grid layout */}
+  <div className="hidden md:grid grid-cols-2 grid-rows-2 gap-3">
+    {[...participants]
+      .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
+      .slice(0, 4)
+      .map((participant) => (
         <ParticipantThumbnail
+          key={participant.userId}
           name={participant.name}
           role={participant.role}
           videoStream={participant.stream}
@@ -253,25 +305,7 @@ const MeetingPage: React.FC = () => {
           onPin={() => handlePinParticipant(participant.userId)}
           isPinned={pinnedParticipantId === participant.userId}
         />
-      </div>
-    ))}
-  </div>
-
-  {/* Medium and larger screen: grid layout */}
-  <div className="hidden md:grid grid-cols-2 grid-rows-2 gap-3">
-    {participants.slice(0, 4).map((participant) => (
-      <ParticipantThumbnail
-        key={participant.userId}
-        name={participant.name}
-        role={participant.role}
-        videoStream={participant.stream}
-        videoEnabled={participant.videoEnabled}
-        audioEnabled={participant.audioEnabled}
-        isLocal={participant.userId === 'local'}
-        onPin={() => handlePinParticipant(participant.userId)}
-        isPinned={pinnedParticipantId === participant.userId}
-      />
-    ))}
+      ))}
   </div>
 </div>
 
@@ -289,12 +323,45 @@ const MeetingPage: React.FC = () => {
 
       <Drawer title="Participants" placement="right" onClose={() => setParticipantsDrawerOpen(false)} open={participantsDrawerOpen} width={window.innerWidth < 600 ? 280 : 320}>
         <div className="space-y-3">
-          {participants.map((participant) => (
-            <div key={participant.userId} className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between">
-              <span>{participant.name}{participant.userId === 'local' ? ' (You)' : ''}</span>
-              <span className="text-xs text-gray-500">{participant.audioEnabled ? '🎤' : '🔇'} {participant.videoEnabled ? '🎥' : '🚫'}</span>
+          {[...participants]
+            .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
+            .map((participant) => (
+              <div key={participant.userId} className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between items-center">
+                {/* Only show ID if current user is trainer */}
+                <span>
+                  {(() => {
+                    // Hamesha sirf name dikhaye, ID na dikhaye
+                    const match = participant.name.match(/^(.*) \((\d+)\)$/);
+                    return (match ? match[1] : participant.name) + (participant.userId === 'local' ? ' (You)' : '');
+                  })()}
+                </span>
+                <span className="text-xs text-gray-500">{participant.audioEnabled ? '🎤' : '🔇'} {participant.videoEnabled ? '🎥' : '🚫'}</span>
+              </div>
+            ))}
+          {/* Mark Attendance button for trainer only */}
+          {participants.find(p => p.userId === 'local')?.role === 'trainer' && (
+            <div className="mt-4">
+              <button
+                className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+                onClick={() => {
+                  const ids = participants
+                    .filter(p => p.userId !== 'local' && p.name && p.name.indexOf('(trainer)') === -1 && p.role !== 'trainer')
+                    .map((p) => {
+                      const match = p.name.match(/\(([^)]+)\)$/);
+                      return match ? match[1] : null;
+                    })
+                    .filter(Boolean);
+                  if (ids.length > 0) {
+                    alert('Present IDs:\n' + ids.join('\n'));
+                  } else {
+                    alert('No participant IDs found.');
+                  }
+                }}
+              >
+                Mark Attendance
+              </button>
             </div>
-          ))}
+          )}
         </div>
       </Drawer>
 

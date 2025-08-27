@@ -21,7 +21,7 @@ export function useWebRTC(roomId: string) {
 
   useEffect(() => {
     const socketService = SocketService.getInstance();
-    const socket = socketService.connect('https://pi.comsdesk.com');
+    const socket = socketService.connect('https://pi.comsdesk.com'); // Adjust URL as needed
     socketRef.current = socket;
 
     webRTCRef.current = new WebRTCService(socket, roomId, (userId, stream) => {
@@ -38,8 +38,12 @@ export function useWebRTC(roomId: string) {
 
     const connect = async () => {
       try {
-        const displayName = new URLSearchParams(window.location.search).get('name') || 'Host';
-        const stream = await webRTCRef.current?.joinRoom(displayName);
+  const params = new URLSearchParams(window.location.search);
+  const displayName = params.get('name') || 'Host';
+  const studentId = params.get('id') || '';
+  // Combine name and studentId for signaling
+  const fullName = studentId ? `${displayName} (${studentId})` : displayName;
+  const stream = await webRTCRef.current?.joinRoom(fullName);
         if (stream) {
           setLocalStream(new MediaStream(stream.getTracks()));
           setIsConnected(true);

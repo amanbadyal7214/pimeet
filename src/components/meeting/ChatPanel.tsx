@@ -44,31 +44,45 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [senderColors, setSenderColors] = useState<{ [key: string]: string }>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Ensure socket is connected (auto-connect if not already)
   useEffect(() => {
-    const socketInstance = SocketService.getInstance().getSocket();
+    let socketInstance = SocketService.getInstance().getSocket();
+    if (!socketInstance) {
+      // You may want to move this URL to a config file or env variable
+      socketInstance = SocketService.getInstance().connect('https://pi.comsdesk.com');
+    }
     setSocket(socketInstance);
+  }, []);
 
-    if (!socketInstance) return;
+  useEffect(() => {
+    if (!socket) return;
 
     const handleIncomingMessage = (payload: ChatMessagePayload) => {
-      if (payload.sender === sender) {
-        // Ignore own message to avoid duplicate
-        return;
-      }
       setMessages((prevMessages) => [
         ...prevMessages,
         { sender: payload.sender, text: payload.message, timestamp: payload.timestamp },
       ]);
+      setSenderColors((prev) => {
+        if (prev[payload.sender]) return prev;
+        // Assign a color not already used, or fallback to hash
+        const usedColors = Object.values(prev);
+        const availableColors = COLORS.filter(c => !usedColors.includes(c));
+        let color = availableColors.length > 0
+          ? availableColors[0]
+          : getColorForSender(payload.sender);
+        return { ...prev, [payload.sender]: color };
+      });
     };
 
-    socketInstance.on('chat-message', handleIncomingMessage);
+    socket.on('chat-message', handleIncomingMessage);
 
     return () => {
-      socketInstance.off('chat-message', handleIncomingMessage);
+      socket.off('chat-message', handleIncomingMessage);
     };
-  }, [sender]);
+  }, [sender, socket]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,11 +99,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
         timestamp: Date.now(),
       });
     }
-
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { sender: 'You', text: newMessage.trim(), timestamp: Date.now() },
-    ]);
     setNewMessage('');
   };
 
@@ -126,9 +135,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white rounded-lg shadow-inner scrollbar-hide">
         {messages.map((msg, index) => {
-          const isYou = msg.sender === 'You';
-          const bubbleColor = isYou ? '#3B82F6' : getColorForSender(msg.sender);
-          const alignClass = isYou ? 'self-end text-right' : 'self-start text-left';
+          const isYou = msg.sender === sender;
+          const bubbleColor = isYou
+            ? '#3B82F6'
+            : senderColors[msg.sender] || getColorForSender(msg.sender);
+          // const alignClass = isYou ? 'self-end text-right' : 'self-start text-left';
 
           return (
             <div
@@ -136,7 +147,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
               className={`flex items-start space-x-3 ${isYou ? 'flex-row-reverse space-x-reverse' : ''}`}
             >
               {!isYou && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white font-semibold text-sm select-none">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm select-none"
+                  style={{ backgroundColor: senderColors[msg.sender] || getColorForSender(msg.sender) }}
+                >
                   {getInitials(msg.sender)}
                 </div>
               )}
