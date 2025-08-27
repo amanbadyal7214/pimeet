@@ -1,22 +1,21 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   useParams,
   useSearchParams,
   useNavigate,
   useLocation,
-} from 'react-router-dom';
-import MeetingControls from '../components/meeting/MeetingControls';
-import ChatPanel from '../components/meeting/ChatPanel';
-import Button from '../components/ui/Button';
-import { formatTime } from '../utils/meeting';
-import { useWebRTC } from '../hooks/useWebRTC';
-import ParticipantThumbnail from '../components/meeting/ParticipantThumbnail';
-import TaskList from '../components/meeting/TaskList';
-import Avatar from '../components/ui/Avatar';
-import { Drawer, Modal } from 'antd';
-import { SocketService } from '../services/socket';
-
+} from "react-router-dom";
+import MeetingControls from "../components/meeting/MeetingControls";
+import ChatPanel from "../components/meeting/ChatPanel";
+import Button from "../components/ui/Button";
+import { formatTime } from "../utils/meeting";
+import { useWebRTC } from "../hooks/useWebRTC";
+import ParticipantThumbnail from "../components/meeting/ParticipantThumbnail";
+import TaskList from "../components/meeting/TaskList";
+import Avatar from "../components/ui/Avatar";
+import { Drawer, Modal } from "antd";
+import { SocketService } from "../services/socket";
 
 const MeetingPage: React.FC = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -28,23 +27,26 @@ const MeetingPage: React.FC = () => {
     creatorName?: string;
     meetingTitle?: string;
   };
-  const displayName = state?.creatorName || searchParams.get('name') || 'Guest';
-  const studentId = searchParams.get('id') || '';
-  const title = state?.meetingTitle || 'Untitled Meeting';
+  const displayName =
+    state?.creatorName || searchParams.get("name") || "Guest";
+  const studentId = searchParams.get("id") || "";
+  const title = state?.meetingTitle || "Untitled Meeting";
 
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
   const [participantsDrawerOpen, setParticipantsDrawerOpen] = useState(false);
   const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
   const [meetingTime, setMeetingTime] = useState(0);
-  const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
+  const [pinnedParticipantId, setPinnedParticipantId] = useState<
+    string | null
+  >(null);
   const [participants, setParticipants] = useState<any[]>([]);
 
   const pinnedVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    const socketUrl = 'https://pi.comsdesk.com'; // Adjust if needed
+    const socketUrl = "https://pi.comsdesk.com"; // Adjust if needed
     SocketService.getInstance().connect(socketUrl);
   }, []);
 
@@ -58,48 +60,53 @@ const MeetingPage: React.FC = () => {
     startScreenShare,
     localAudioEnabled,
     localVideoEnabled,
-  } = useWebRTC(meetingId || '');
+  } = useWebRTC(meetingId || "");
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const isMobile =
+    typeof window !== "undefined" && window.innerWidth <= 768;
 
   useEffect(() => {
-    const interval = setInterval(() => setMeetingTime(prev => prev + 1), 1000);
+    const interval = setInterval(
+      () => setMeetingTime((prev) => prev + 1),
+      1000
+    );
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     // Set global flag for trainer
-    if (typeof window !== 'undefined') {
-      (window as any).__PI_MEET_IS_TRAINER = studentId === 'trainer';
+    if (typeof window !== "undefined") {
+      (window as any).__PI_MEET_IS_TRAINER = studentId === "trainer";
     }
     const updated = [
       {
-        userId: 'local',
+        userId: "local",
         name: studentId ? `${displayName} (${studentId})` : displayName,
-        role: studentId === 'trainer' ? 'trainer' : 'You',
+        role: studentId === "trainer" ? "trainer" : "You",
         audioEnabled: localAudioEnabled,
         videoEnabled: localVideoEnabled,
         stream: localStream || undefined,
       },
     ];
 
-    const isTrainer = studentId === 'trainer';
+    const isTrainer = studentId === "trainer";
     remoteUserDisplayNames.forEach((name, userId) => {
       let display = name;
-      let id = '';
+      let id = "";
       const match = name.match(/^(.*) \((\d+)\)$/);
       if (match) {
         display = match[1];
         id = match[2];
       }
-      const status = remoteUserStatus.get(userId) || {
-        audioEnabled: true,
-        videoEnabled: true,
-      };
+      const status =
+        remoteUserStatus.get(userId) || {
+          audioEnabled: true,
+          videoEnabled: true,
+        };
       updated.push({
         userId,
         name: isTrainer && id ? `${display} (${id})` : display,
-        role: 'Participant',
+        role: "Participant",
         audioEnabled: status.audioEnabled,
         videoEnabled: status.videoEnabled,
         stream: remoteStreams.get(userId),
@@ -107,7 +114,7 @@ const MeetingPage: React.FC = () => {
     });
 
     // Move trainer to the top if present
-    const trainerIndex = updated.findIndex(p => p.role === 'trainer');
+    const trainerIndex = updated.findIndex((p) => p.role === "trainer");
     if (trainerIndex > 0) {
       const [trainer] = updated.splice(trainerIndex, 1);
       updated.unshift(trainer);
@@ -122,7 +129,7 @@ const MeetingPage: React.FC = () => {
     localVideoEnabled,
   ]);
 
-  // New useEffect to detect new participant join and open chat drawer
+  // Detect new participant join and open chat drawer
   const prevParticipantsCountRef = React.useRef(participants.length);
 
   useEffect(() => {
@@ -133,7 +140,9 @@ const MeetingPage: React.FC = () => {
   }, [participants]);
 
   useEffect(() => {
-    const pinned = participants.find(p => p.userId === pinnedParticipantId);
+    const pinned = participants.find(
+      (p) => p.userId === pinnedParticipantId
+    );
     if (pinned?.videoEnabled && pinned?.stream && pinnedVideoRef.current) {
       pinnedVideoRef.current.srcObject = pinned.stream;
     }
@@ -148,21 +157,37 @@ const MeetingPage: React.FC = () => {
   const enterFullscreen = () => {
     const el = pinnedVideoRef.current || localVideoRef.current;
     if (el?.requestFullscreen) el.requestFullscreen();
-    else if ((el as any)?.webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-    else if ((el as any)?.msRequestFullscreen) (el as any).msRequestFullscreen();
+    else if ((el as any)?.webkitRequestFullscreen)
+      (el as any).webkitRequestFullscreen();
+    else if ((el as any)?.msRequestFullscreen)
+      (el as any).msRequestFullscreen();
   };
 
-  const handleToggleAudio = async () => await toggleAudio(!localAudioEnabled);
-  const handleToggleVideo = async () => await toggleVideo(!localVideoEnabled);
+  const handleToggleAudio = async () =>
+    await toggleAudio(!localAudioEnabled);
+  const handleToggleVideo = async () =>
+    await toggleVideo(!localVideoEnabled);
   const handleShareScreen = async () => {
     try {
       await startScreenShare();
     } catch (err) {
-      console.error('Screen share failed', err);
+      console.error("Screen share failed", err);
     }
   };
 
-  const confirmLeaveMeeting = () => navigate('/');
+  // ✅ Leave redirect logic
+  const confirmLeaveMeeting = () => {
+    if (studentId === "trainer") {
+      window.location.href =
+        "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+    } else if (studentId) {
+      window.location.href =
+        "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+    } else {
+      navigate("/"); // fallback for guests without ID
+    }
+  };
+
   const handleLeaveMeeting = () => setIsLeaveModalVisible(true);
   const handleShowParticipants = () => setParticipantsDrawerOpen(true);
   const handleShowChat = () => setIsChatDrawerOpen(true);
@@ -172,8 +197,67 @@ const MeetingPage: React.FC = () => {
     setPinnedParticipantId(userId === pinnedParticipantId ? null : userId);
   };
 
+  // ✅ Attendance API
+// ✅ Attendance API
+const markAttendance = async () => {
+  const ids = participants
+    .filter(
+      (p) =>
+        p.userId !== "local" &&
+        p.name &&
+        p.name.indexOf("(trainer)") === -1 &&
+        p.role !== "trainer"
+    )
+    .map((p) => {
+      const match = p.name.match(/\(([^)]+)\)$/);
+      return match ? match[1] : null;
+    })
+    .filter(Boolean);
+
+  if (ids.length > 0) {
+    const today = new Date();
+    // ✅ Correct format: yyyy-mm-dd
+    const formattedDate = `${today.getFullYear()}-${String(
+      today.getMonth() + 1
+    ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const payload = ids.map((id) => ({
+      studentId: id,
+      date: formattedDate,
+    }));
+    console.log("Attendance Payload:", payload);
+
+    try {
+      const response = await fetch(
+        "https://project.pisofterp.com/pipl/restworld/markAttendance",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (response.ok) {
+        alert("✅ Attendance marked successfully!");
+      } else {
+        const errorText = await response.text();
+        alert("❌ Failed: " + errorText);
+      }
+    } catch (err) {
+      console.error("Attendance API error:", err);
+      alert("❌ Error marking attendance.");
+    }
+  } else {
+    alert("No participant IDs found.");
+  }
+};
+
   const renderMainView = () => {
-    const pinned = participants.find(p => p.userId === pinnedParticipantId);
+    const pinned = participants.find(
+      (p) => p.userId === pinnedParticipantId
+    );
 
     if (pinned?.videoEnabled && pinned?.stream) {
       return (
@@ -181,9 +265,9 @@ const MeetingPage: React.FC = () => {
           <video
             ref={pinnedVideoRef}
             autoPlay
-            muted={pinned.userId === 'local'}
+            muted={pinned.userId === "local"}
             playsInline
-            className="w-full h-screen object-cover rounded-xl scale-x-[-1]"
+            className="w-full h-screen object-cover rounded-xl"
           />
           {isMobile && (
             <button
@@ -194,7 +278,7 @@ const MeetingPage: React.FC = () => {
             </button>
           )}
           <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
-            {pinned.name} {pinned.userId === 'local' ? '(You)' : ''}
+            {pinned.name} {pinned.userId === "local" ? "(You)" : ""}
           </div>
         </div>
       );
@@ -208,7 +292,7 @@ const MeetingPage: React.FC = () => {
             autoPlay
             muted
             playsInline
-            className="w-full h-screen object-cover rounded-xl scale-x-[-1] "
+            className="w-full h-screen object-cover rounded-xl"
           />
           {isMobile && (
             <button
@@ -227,7 +311,7 @@ const MeetingPage: React.FC = () => {
 
     return (
       <div className="flex items-center justify-center h-screen text-white text-5xl font-bold bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 rounded-xl">
-  <Avatar name={displayName} size="lg" />
+        <Avatar name={displayName} size="lg" />
       </div>
     );
   };
@@ -267,96 +351,133 @@ const MeetingPage: React.FC = () => {
           </div>
         </div>
 
-      <div className="w-full md:w-80 max-h-[40vh] md:max-h-[80vh] p-1">
-  {/* Small screen: horizontal scroll */}
-  <div className="md:hidden flex space-x-3 overflow-x-auto scrollbar-hide">
-    {[...participants]
-      .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
-      .map((participant) => (
-        <div key={participant.userId} className="flex-shrink-0 w-40">
-          <ParticipantThumbnail
-            name={participant.name}
-            role={participant.role}
-            videoStream={participant.stream}
-            videoEnabled={participant.videoEnabled}
-            audioEnabled={participant.audioEnabled}
-            isLocal={participant.userId === 'local'}
-            onPin={() => handlePinParticipant(participant.userId)}
-            isPinned={pinnedParticipantId === participant.userId}
-          />
+        <div className="w-full md:w-80 max-h-[40vh] md:max-h-[80vh] p-1">
+          {/* Small screen: horizontal scroll */}
+          <div className="md:hidden flex space-x-3 overflow-x-auto scrollbar-hide">
+            {[...participants]
+              .sort((a, b) =>
+                a.role === "trainer" ? -1 : b.role === "trainer" ? 1 : 0
+              )
+              .map((participant) => (
+                <div
+                  key={participant.userId}
+                  className="flex-shrink-0 w-40"
+                >
+                  <ParticipantThumbnail
+                    name={participant.name}
+                    role={participant.role}
+                    videoStream={participant.stream}
+                    videoEnabled={participant.videoEnabled}
+                    audioEnabled={participant.audioEnabled}
+                    isLocal={participant.userId === "local"}
+                    onPin={() =>
+                      handlePinParticipant(participant.userId)
+                    }
+                    isPinned={
+                      pinnedParticipantId === participant.userId
+                    }
+                  />
+                </div>
+              ))}
+          </div>
+
+          {/* Medium and larger screen: grid layout */}
+          <div className="hidden md:grid grid-cols-2 grid-rows-2 gap-3">
+            {[...participants]
+              .sort((a, b) =>
+                a.role === "trainer" ? -1 : b.role === "trainer" ? 1 : 0
+              )
+              .slice(0, 4)
+              .map((participant) => (
+                <ParticipantThumbnail
+                  key={participant.userId}
+                  name={participant.name}
+                  role={participant.role}
+                  videoStream={participant.stream}
+                  videoEnabled={participant.videoEnabled}
+                  audioEnabled={participant.audioEnabled}
+                  isLocal={participant.userId === "local"}
+                  onPin={() =>
+                    handlePinParticipant(participant.userId)
+                  }
+                  isPinned={
+                    pinnedParticipantId === participant.userId
+                  }
+                />
+              ))}
+          </div>
         </div>
-      ))}
-  </div>
-
-  {/* Medium and larger screen: grid layout */}
-  <div className="hidden md:grid grid-cols-2 grid-rows-2 gap-3">
-    {[...participants]
-      .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
-      .slice(0, 4)
-      .map((participant) => (
-        <ParticipantThumbnail
-          key={participant.userId}
-          name={participant.name}
-          role={participant.role}
-          videoStream={participant.stream}
-          videoEnabled={participant.videoEnabled}
-          audioEnabled={participant.audioEnabled}
-          isLocal={participant.userId === 'local'}
-          onPin={() => handlePinParticipant(participant.userId)}
-          isPinned={pinnedParticipantId === participant.userId}
-        />
-      ))}
-  </div>
-</div>
-
       </div>
 
-<Drawer title="Chat" placement="right" onClose={() => setIsChatDrawerOpen(false)} open={isChatDrawerOpen} width={window.innerWidth < 600 ? 280 : 350}>
-  <ChatPanel roomId={meetingId || ''} sender={displayName} />
-</Drawer>
+      {/* Chat Drawer */}
+      <Drawer
+        title="Chat"
+        placement="right"
+        onClose={() => setIsChatDrawerOpen(false)}
+        open={isChatDrawerOpen}
+        width={window.innerWidth < 600 ? 280 : 350}
+      >
+        <ChatPanel roomId={meetingId || ""} sender={displayName} />
+      </Drawer>
 
-      <Drawer title={null} placement="right" onClose={() => setIsInfoDrawerOpen(false)} open={isInfoDrawerOpen} width={window.innerWidth < 600 ? 280 : 350} bodyStyle={{ padding: 0, height: "100%" }} closable={false}>
+      {/* Info Drawer */}
+      <Drawer
+        title={null}
+        placement="right"
+        onClose={() => setIsInfoDrawerOpen(false)}
+        open={isInfoDrawerOpen}
+        width={window.innerWidth < 600 ? 280 : 350}
+        bodyStyle={{ padding: 0, height: "100%" }}
+        closable={false}
+      >
         <div style={{ height: "100%" }}>
           <TaskList onClose={() => setIsInfoDrawerOpen(false)} />
         </div>
       </Drawer>
 
-      <Drawer title="Participants" placement="right" onClose={() => setParticipantsDrawerOpen(false)} open={participantsDrawerOpen} width={window.innerWidth < 600 ? 280 : 320}>
+      {/* Participants Drawer */}
+      <Drawer
+        title="Participants"
+        placement="right"
+        onClose={() => setParticipantsDrawerOpen(false)}
+        open={participantsDrawerOpen}
+        width={window.innerWidth < 600 ? 280 : 320}
+      >
         <div className="space-y-3">
           {[...participants]
-            .sort((a, b) => (a.role === 'trainer' ? -1 : b.role === 'trainer' ? 1 : 0))
+            .sort((a, b) =>
+              a.role === "trainer" ? -1 : b.role === "trainer" ? 1 : 0
+            )
             .map((participant) => (
-              <div key={participant.userId} className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between items-center">
-                {/* Only show ID if current user is trainer */}
+              <div
+                key={participant.userId}
+                className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between items-center"
+              >
                 <span>
                   {(() => {
-                    // Hamesha sirf name dikhaye, ID na dikhaye
-                    const match = participant.name.match(/^(.*) \((\d+)\)$/);
-                    return (match ? match[1] : participant.name) + (participant.userId === 'local' ? ' (You)' : '');
+                    const match = participant.name.match(
+                      /^(.*) \((\d+)\)$/
+                    );
+                    return (
+                      (match ? match[1] : participant.name) +
+                      (participant.userId === "local" ? " (You)" : "")
+                    );
                   })()}
                 </span>
-                <span className="text-xs text-gray-500">{participant.audioEnabled ? '🎤' : '🔇'} {participant.videoEnabled ? '🎥' : '🚫'}</span>
+                <span className="text-xs text-gray-500">
+                  {participant.audioEnabled ? "🎤" : "🔇"}{" "}
+                  {participant.videoEnabled ? "🎥" : "🚫"}
+                </span>
               </div>
             ))}
-          {/* Mark Attendance button for trainer only */}
-          {participants.find(p => p.userId === 'local')?.role === 'trainer' && (
+
+          {/* ✅ Attendance Button (Trainer only) */}
+          {participants.find((p) => p.userId === "local")?.role ===
+            "trainer" && (
             <div className="mt-4">
               <button
                 className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-                onClick={() => {
-                  const ids = participants
-                    .filter(p => p.userId !== 'local' && p.name && p.name.indexOf('(trainer)') === -1 && p.role !== 'trainer')
-                    .map((p) => {
-                      const match = p.name.match(/\(([^)]+)\)$/);
-                      return match ? match[1] : null;
-                    })
-                    .filter(Boolean);
-                  if (ids.length > 0) {
-                    alert('Present IDs:\n' + ids.join('\n'));
-                  } else {
-                    alert('No participant IDs found.');
-                  }
-                }}
+                onClick={markAttendance}
               >
                 Mark Attendance
               </button>
@@ -365,17 +486,31 @@ const MeetingPage: React.FC = () => {
         </div>
       </Drawer>
 
-      <Modal title="Leave Meeting" open={isLeaveModalVisible} onCancel={() => setIsLeaveModalVisible(false)} footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <Button key="cancel" variant="outline" onClick={() => setIsLeaveModalVisible(false)}>
-            Cancel
-          </Button>
-          <Button key="leave" variant="danger" onClick={confirmLeaveMeeting}>
-            Leave
-          </Button>
-        </div>
-      }>
-        <p className="text-center mb-0">Are you sure you want to leave this meeting?</p>
+      {/* Leave Meeting Modal */}
+      <Modal
+        title="Leave Meeting"
+        open={isLeaveModalVisible}
+        onCancel={() => setIsLeaveModalVisible(false)}
+        footer={
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}
+          >
+            <Button
+              key="cancel"
+              variant="outline"
+              onClick={() => setIsLeaveModalVisible(false)}
+            >
+              Cancel
+            </Button>
+            <Button key="leave" variant="danger" onClick={confirmLeaveMeeting}>
+              Leave
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-center mb-0">
+          Are you sure you want to leave this meeting?
+        </p>
       </Modal>
     </div>
   );
