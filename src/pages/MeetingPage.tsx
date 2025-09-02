@@ -41,6 +41,8 @@ const MeetingPage: React.FC = () => {
     string | null
   >(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+
 
   const pinnedVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -324,7 +326,7 @@ const markAttendance = async () => {
             <div className="flex items-center space-x-2 cursor-pointer">
               <div className="bg-slate-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all duration-300 group-hover:w-48 group-hover:justify-start px-2 bg-opacity-70 overflow-hidden">
                 <span className="text-sm rounded-full">ℹ️</span>
-                <span className="ml-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <span className="ml-2 whitespace-nowrap font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   {title}
                 </span>
               </div>
@@ -436,55 +438,109 @@ const markAttendance = async () => {
       </Drawer>
 
       {/* Participants Drawer */}
-      <Drawer
-        title="Participants"
-        placement="right"
-        onClose={() => setParticipantsDrawerOpen(false)}
-        open={participantsDrawerOpen}
-        width={window.innerWidth < 600 ? 280 : 320}
-      >
-        <div className="space-y-3">
-          {[...participants]
-            .sort((a, b) =>
-              a.role === "trainer" ? -1 : b.role === "trainer" ? 1 : 0
-            )
-            .map((participant) => (
-              <div
-                key={participant.userId}
-                className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between items-center"
-              >
-                <span>
-                  {(() => {
-                    const match = participant.name.match(
-                      /^(.*) \((\d+)\)$/
-                    );
-                    return (
-                      (match ? match[1] : participant.name) +
-                      (participant.userId === "local" ? " (You)" : "")
-                    );
-                  })()}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {participant.audioEnabled ? "🎤" : "🔇"}{" "}
-                  {participant.videoEnabled ? "🎥" : "🚫"}
-                </span>
-              </div>
-            ))}
+    {/* Participants Drawer */}
+<Drawer
+  title="Participants"
+  placement="right"
+  onClose={() => setParticipantsDrawerOpen(false)}
+  open={participantsDrawerOpen}
+  width={window.innerWidth < 600 ? 280 : 320}
+>
+  <div className="space-y-3">
+    {/* ✅ Select All Checkbox */}
+    {participants.find((p) => p.userId === "local")?.role === "trainer" && (
+      <div className="flex items-center mb-2">
+        <input
+          type="checkbox"
+          checked={
+            participants
+              .filter((p) => p.userId !== "local" && p.role !== "trainer")
+              .every((p) => selectedParticipants.includes(p.userId)) &&
+            participants.filter((p) => p.userId !== "local" && p.role !== "trainer").length > 0
+          }
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedParticipants(
+                participants
+                  .filter((p) => p.userId !== "local" && p.role !== "trainer")
+                  .map((p) => p.userId)
+              );
+            } else {
+              setSelectedParticipants([]);
+            }
+          }}
+          className="mr-2"
+        />
+        <span className="text-gray-700 font-medium">Select All</span>
+      </div>
+    )}
 
-          {/* ✅ Attendance Button (Trainer only) */}
-          {participants.find((p) => p.userId === "local")?.role ===
-            "trainer" && (
-            <div className="mt-4">
-              <button
-                className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-                onClick={markAttendance}
-              >
-                Mark Attendance
-              </button>
-            </div>
-          )}
+    {/* ✅ Individual Participants */}
+    {[...participants]
+      .sort((a, b) =>
+        a.role === "trainer" ? -1 : b.role === "trainer" ? 1 : 0
+      )
+      .map((participant) => (
+        <div
+          key={participant.userId}
+          className="text-sm text-gray-800 bg-gray-100 px-3 py-2 rounded-md shadow-sm flex justify-between items-center"
+        >
+          <div className="flex items-center space-x-2">
+            {/* Show checkboxes only for trainer view */}
+            {participants.find((p) => p.userId === "local")?.role ===
+              "trainer" &&
+              participant.role !== "trainer" && (
+                <input
+                  type="checkbox"
+                  checked={selectedParticipants.includes(participant.userId)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedParticipants([
+                        ...selectedParticipants,
+                        participant.userId,
+                      ]);
+                    } else {
+                      setSelectedParticipants(
+                        selectedParticipants.filter(
+                          (id) => id !== participant.userId
+                        )
+                      );
+                    }
+                  }}
+                  className="mr-2"
+                />
+              )}
+            <span>
+              {(() => {
+                const match = participant.name.match(/^(.*) \((\d+)\)$/);
+                return (
+                  (match ? match[1] : participant.name) +
+                  (participant.userId === "local" ? " (You)" : "")
+                );
+              })()}
+            </span>
+          </div>
+          <span className="text-xs text-gray-500">
+            {participant.audioEnabled ? "🎤" : "🔇"}{" "}
+            {participant.videoEnabled ? "🎥" : "🚫"}
+          </span>
         </div>
-      </Drawer>
+      ))}
+
+    {/* ✅ Attendance Button (Trainer only) */}
+    {participants.find((p) => p.userId === "local")?.role === "trainer" && (
+      <div className="mt-4">
+        <button
+          className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+          onClick={markAttendance}
+        >
+          Mark Attendance
+        </button>
+      </div>
+    )}
+  </div>
+</Drawer>
+
 
       {/* Leave Meeting Modal */}
       <Modal
