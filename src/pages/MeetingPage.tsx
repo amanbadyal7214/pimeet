@@ -42,15 +42,43 @@ const MeetingPage: React.FC = () => {
   >(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  
+  // Chat-related state
+  const [messages, setMessages] = useState<any[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
 
   const pinnedVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    const socketUrl = "https://pi.comsdesk.com"; // Adjust if needed
+    const socketUrl = "http://localhost:3001"; // Adjust if needed
     SocketService.getInstance().connect(socketUrl);
   }, []);
+
+  // Handle incoming chat messages at the meeting page level
+  useEffect(() => {
+    const socket = SocketService.getInstance().getSocket();
+    if (!socket) return;
+
+    const handleIncomingMessage = (payload: any) => {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { sender: payload.sender, text: payload.message, timestamp: payload.timestamp },
+      ]);
+      
+      // Only increment unread count if chat drawer is not open
+      if (!isChatDrawerOpen) {
+        setUnreadMessagesCount((prev) => prev + 1);
+      }
+    };
+
+    socket.on('chat-message', handleIncomingMessage);
+
+    return () => {
+      socket.off('chat-message', handleIncomingMessage);
+    };
+  }, [isChatDrawerOpen]);
 
   const {
     localStream,
@@ -60,8 +88,11 @@ const MeetingPage: React.FC = () => {
     toggleAudio,
     toggleVideo,
     startScreenShare,
+    stopScreenShare,
     localAudioEnabled,
     localVideoEnabled,
+    screenShareStream,
+    isLocalScreenSharing,
   } = useWebRTC(meetingId || "");
 
   const isMobile =
@@ -88,6 +119,8 @@ const MeetingPage: React.FC = () => {
         audioEnabled: localAudioEnabled,
         videoEnabled: localVideoEnabled,
         stream: localStream || undefined,
+        isScreenSharing: isLocalScreenSharing,
+        screenShareStream: screenShareStream || undefined,
       },
     ];
 
@@ -104,6 +137,7 @@ const MeetingPage: React.FC = () => {
         remoteUserStatus.get(userId) || {
           audioEnabled: true,
           videoEnabled: true,
+          isScreenSharing: false,
         };
       updated.push({
         userId,
@@ -112,6 +146,8 @@ const MeetingPage: React.FC = () => {
         audioEnabled: status.audioEnabled,
         videoEnabled: status.videoEnabled,
         stream: remoteStreams.get(userId),
+        isScreenSharing: status.isScreenSharing,
+        screenShareStream: status.isScreenSharing ? remoteStreams.get(userId) : undefined,
       });
     });
 
@@ -129,17 +165,20 @@ const MeetingPage: React.FC = () => {
     remoteUserStatus,
     localAudioEnabled,
     localVideoEnabled,
+    screenShareStream,
+    isLocalScreenSharing,
   ]);
 
-  // Detect new participant join and open chat drawer
+  // Detect new participant join and open chat drawer (only for trainer)
   const prevParticipantsCountRef = React.useRef(participants.length);
 
   useEffect(() => {
-    if (participants.length > prevParticipantsCountRef.current) {
+    // Only open chat automatically for trainer when new participant joins
+    if (participants.length > prevParticipantsCountRef.current && studentId === "trainer") {
       setIsChatDrawerOpen(true);
     }
     prevParticipantsCountRef.current = participants.length;
-  }, [participants]);
+  }, [participants, studentId]);
 
   useEffect(() => {
     const pinned = participants.find(
@@ -151,10 +190,28 @@ const MeetingPage: React.FC = () => {
   }, [pinnedParticipantId, participants]);
 
   useEffect(() => {
+    console.log('localStream useEffect triggered');
+    console.log('localStream:', localStream);
+    console.log('localVideoRef.current:', localVideoRef.current);
+    console.log('localVideoEnabled:', localVideoEnabled);
+    
     if (localStream && localVideoRef.current) {
+      console.log('Setting localVideoRef.srcObject to localStream');
+      console.log('localStream tracks:', localStream.getTracks().map(t => t.kind + ':' + t.label));
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(error => {
+        console.error('Failed to play local video:', error);
+      });
+    } else {
+      console.log('Not setting video - missing localStream or ref');
     }
-  }, [localStream]);
+  }, [localStream, localVideoEnabled]);
+
+  useEffect(() => {
+    if (screenShareStream && screenShareRef.current) {
+      screenShareRef.current.srcObject = screenShareStream;
+    }
+  }, [screenShareStream]);
 
   const enterFullscreen = () => {
     const el = pinnedVideoRef.current || localVideoRef.current;
@@ -169,9 +226,17 @@ const MeetingPage: React.FC = () => {
     await toggleAudio(!localAudioEnabled);
   const handleToggleVideo = async () =>
     await toggleVideo(!localVideoEnabled);
+
   const handleShareScreen = async () => {
     try {
-      await startScreenShare();
+      console.log('handleShareScreen called, isLocalScreenSharing:', isLocalScreenSharing);
+      if (!isLocalScreenSharing) {
+        console.log('Starting screen share...');
+        await startScreenShare();
+      } else {
+        console.log('Stopping screen share...');
+        await stopScreenShare();
+      }
     } catch (err) {
       console.error("Screen share failed", err);
     }
@@ -192,7 +257,22 @@ const MeetingPage: React.FC = () => {
 
   const handleLeaveMeeting = () => setIsLeaveModalVisible(true);
   const handleShowParticipants = () => setParticipantsDrawerOpen(true);
-  const handleShowChat = () => setIsChatDrawerOpen(true);
+  const handleShowChat = () => {
+    setIsChatDrawerOpen(true);
+    setUnreadMessagesCount(0); // Reset unread count when opening chat
+  };
+
+  const handleSendMessage = (message: string) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket) {
+      socket.emit('chat-message', {
+        roomId: meetingId,
+        message,
+        sender: displayName,
+        timestamp: Date.now(),
+      });
+    }
+  };
   const handleShowInfo = () => setIsInfoDrawerOpen(true);
 
   const handlePinParticipant = (userId: string) => {
@@ -256,7 +336,10 @@ const markAttendance = async () => {
   }
 };
 
+  const screenShareRef = useRef<HTMLVideoElement | null>(null);
+
   const renderMainView = () => {
+    // First priority: Show pinned participant
     const pinned = participants.find(
       (p) => p.userId === pinnedParticipantId
     );
@@ -269,7 +352,7 @@ const markAttendance = async () => {
             autoPlay
             muted={pinned.userId === "local"}
             playsInline
-            className="w-full h-screen object-cover rounded-xl"
+            className={`w-full h-screen ${pinned.isScreenSharing ? 'object-contain bg-gray-900' : 'object-cover scale-x-[-1]'} rounded-xl`}
           />
           {isMobile && (
             <button
@@ -280,12 +363,38 @@ const markAttendance = async () => {
             </button>
           )}
           <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
-            {pinned.name} {pinned.userId === "local" ? "(You)" : ""}
+            {pinned.name} {pinned.userId === "local" ? "(You)" : ""} {pinned.isScreenSharing ? "(Screen Share)" : ""}
           </div>
         </div>
       );
     }
 
+    // Second priority: Show screen share if active
+    if (screenShareStream) {
+      return (
+        <div className="relative w-full h-full">
+          <video
+            ref={screenShareRef}
+            autoPlay
+            playsInline
+            className="w-full h-screen object-contain rounded-xl bg-gray-900"
+          />
+          {isMobile && (
+            <button
+              onClick={enterFullscreen}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm"
+            >
+              Fullscreen
+            </button>
+          )}
+          <div className="absolute bottom-4 left-4 text-white text-lg font-semibold bg-black bg-opacity-50 px-4 py-1 rounded-xl">
+            Screen Share
+          </div>
+        </div>
+      );
+    }
+
+    // Third priority: Show local video if enabled
     if (localStream && localVideoEnabled) {
       return (
         <div className="relative w-full h-full">
@@ -294,7 +403,7 @@ const markAttendance = async () => {
             autoPlay
             muted
             playsInline
-            className="w-full h-screen object-cover rounded-xl"
+            className="w-full h-screen object-cover rounded-xl scale-x-[-1]"
           />
           {isMobile && (
             <button
@@ -311,6 +420,7 @@ const markAttendance = async () => {
       );
     }
 
+    // Fallback: Show avatar
     return (
       <div className="flex items-center justify-center h-screen text-white text-5xl font-bold bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 rounded-xl">
         <Avatar name={displayName} size="lg" />
@@ -337,7 +447,9 @@ const markAttendance = async () => {
             <MeetingControls
               audioEnabled={localAudioEnabled}
               videoEnabled={localVideoEnabled}
+              isScreenSharing={isLocalScreenSharing}
               isChatOpen={isChatDrawerOpen}
+              unreadMessagesCount={unreadMessagesCount}
               participantCount={participants.length}
               meetingTime={formatTime(meetingTime)}
               displayName={displayName}
@@ -369,8 +481,10 @@ const markAttendance = async () => {
                     name={participant.name}
                     role={participant.role}
                     videoStream={participant.stream}
+                    screenShareStream={participant.screenShareStream}
                     videoEnabled={participant.videoEnabled}
                     audioEnabled={participant.audioEnabled}
+                    isScreenSharing={participant.isScreenSharing}
                     isLocal={participant.userId === "local"}
                     onPin={() =>
                       handlePinParticipant(participant.userId)
@@ -396,8 +510,10 @@ const markAttendance = async () => {
                   name={participant.name}
                   role={participant.role}
                   videoStream={participant.stream}
+                  screenShareStream={participant.screenShareStream}
                   videoEnabled={participant.videoEnabled}
                   audioEnabled={participant.audioEnabled}
+                  isScreenSharing={participant.isScreenSharing}
                   isLocal={participant.userId === "local"}
                   onPin={() =>
                     handlePinParticipant(participant.userId)
@@ -419,7 +535,11 @@ const markAttendance = async () => {
         open={isChatDrawerOpen}
         width={window.innerWidth < 600 ? 280 : 350}
       >
-        <ChatPanel roomId={meetingId || ""} sender={displayName} />
+        <ChatPanel 
+          sender={displayName} 
+          messages={messages}
+          onSendMessage={handleSendMessage}
+        />
       </Drawer>
 
       {/* Info Drawer */}

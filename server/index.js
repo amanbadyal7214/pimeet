@@ -60,6 +60,25 @@ io.on('connection', (socket) => {
     });
   });
 
+  // 📺 Screen sharing events
+  socket.on('screen-share-started', () => {
+    const roomId = userRoomMap.get(socket.id);
+    if (!roomId) return;
+
+    socket.to(roomId).emit('screen-share-started', {
+      userId: socket.id,
+    });
+  });
+
+  socket.on('screen-share-stopped', () => {
+    const roomId = userRoomMap.get(socket.id);
+    if (!roomId) return;
+
+    socket.to(roomId).emit('screen-share-stopped', {
+      userId: socket.id,
+    });
+  });
+
   // 🔄 Manual leave
   socket.on('leave-room', ({ roomId }) => {
     handleUserLeaveRoom(socket, roomId);

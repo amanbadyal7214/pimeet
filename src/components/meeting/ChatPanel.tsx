@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SocketService } from '../../services/socket';
-import { Socket } from 'socket.io-client';
 
 interface Message {
   sender: string;
@@ -9,15 +7,9 @@ interface Message {
 }
 
 interface ChatPanelProps {
-  roomId: string;
   sender: string;
-}
-
-interface ChatMessagePayload {
-  userId: string;
-  sender: string;
-  message: string;
-  timestamp: number;
+  messages: Message[];
+  onSendMessage: (message: string) => void;
 }
 
 const COLORS = [
@@ -40,49 +32,26 @@ function getColorForSender(sender: string): string {
   return COLORS[index];
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+const ChatPanel: React.FC<ChatPanelProps> = ({ sender, messages, onSendMessage }) => {
   const [newMessage, setNewMessage] = useState('');
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [senderColors, setSenderColors] = useState<{ [key: string]: string }>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Ensure socket is connected (auto-connect if not already)
+  // Ensure sender colors are consistent
   useEffect(() => {
-    let socketInstance = SocketService.getInstance().getSocket();
-    if (!socketInstance) {
-      // You may want to move this URL to a config file or env variable
-      socketInstance = SocketService.getInstance().connect('https://pi.comsdesk.com');
-    }
-    setSocket(socketInstance);
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleIncomingMessage = (payload: ChatMessagePayload) => {
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { sender: payload.sender, text: payload.message, timestamp: payload.timestamp },
-      ]);
+    messages.forEach((msg) => {
       setSenderColors((prev) => {
-        if (prev[payload.sender]) return prev;
+        if (prev[msg.sender]) return prev;
         // Assign a color not already used, or fallback to hash
         const usedColors = Object.values(prev);
         const availableColors = COLORS.filter(c => !usedColors.includes(c));
         let color = availableColors.length > 0
           ? availableColors[0]
-          : getColorForSender(payload.sender);
-        return { ...prev, [payload.sender]: color };
+          : getColorForSender(msg.sender);
+        return { ...prev, [msg.sender]: color };
       });
-    };
-
-    socket.on('chat-message', handleIncomingMessage);
-
-    return () => {
-      socket.off('chat-message', handleIncomingMessage);
-    };
-  }, [sender, socket]);
+    });
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,15 +59,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ roomId, sender }) => {
 
   const handleSendMessage = () => {
     if (newMessage.trim() === '') return;
-
-    if (socket) {
-      socket.emit('chat-message', {
-        roomId,
-        message: newMessage.trim(),
-        sender,
-        timestamp: Date.now(),
-      });
-    }
+    
+    onSendMessage(newMessage.trim());
     setNewMessage('');
   };
 

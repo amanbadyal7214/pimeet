@@ -125,12 +125,21 @@ export class WebRTCService {
   }
 
   public async toggleVideo(enabled: boolean) {
-    if (!this.localStream) return;
+    console.log('=== toggleVideo called ===');
+    console.log('enabled:', enabled);
+    console.log('currentVideoTrack:', this.currentVideoTrack ? this.currentVideoTrack.label : 'null');
+    
+    if (!this.localStream) {
+      console.log('No localStream available');
+      return;
+    }
 
     // Preserve audio tracks
     const audioTracks = this.localStream.getAudioTracks();
+    console.log('Current audio tracks:', audioTracks.length);
 
     if (!enabled) {
+      console.log('Disabling video - replacing with blank track');
       // Replace current video track with blank video track to simulate video off
       const blankTrack = this.createBlankVideoTrack();
       if (this.currentVideoTrack) {
@@ -143,26 +152,39 @@ export class WebRTCService {
       this.localStream.addTrack(blankTrack);
       this.currentVideoTrack = blankTrack;
     } else {
-      // Restore real video track
-      if (this.currentVideoTrack && this.currentVideoTrack === this.blankVideoTrack) {
-        this.localStream.removeTrack(this.blankVideoTrack!);
+      console.log('Enabling video - getting fresh camera stream');
+      
+      try {
+        // Always get a fresh camera stream when enabling video
+        console.log('Getting fresh camera stream...');
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         const realTrack = stream.getVideoTracks()[0];
-        this.currentVideoTrack = realTrack;
+        console.log('Got fresh camera track:', realTrack.label);
+        
+        // Remove any existing video track
+        if (this.currentVideoTrack) {
+          console.log('Removing existing video track:', this.currentVideoTrack.label);
+          this.localStream.removeTrack(this.currentVideoTrack);
+          this.currentVideoTrack.stop();
+        }
+        
+        // Add new camera track
         this.localStream.addTrack(realTrack);
-        this.peerConnections.forEach(pc => {
-          const sender = pc.getSenders().find(s => s.track === this.blankVideoTrack);
-          if (sender) sender.replaceTrack(realTrack);
-        });
-      } else if (!this.currentVideoTrack) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const realTrack = stream.getVideoTracks()[0];
         this.currentVideoTrack = realTrack;
-        this.localStream.addTrack(realTrack);
+        console.log('Added new camera track to localStream');
+        
+        // Replace track in all peer connections
         this.peerConnections.forEach(pc => {
           const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) sender.replaceTrack(realTrack);
+          if (sender) {
+            console.log('Replacing track in peer connection');
+            sender.replaceTrack(realTrack);
+          }
         });
+        
+      } catch (error) {
+        console.error('Failed to get camera stream:', error);
+        throw error;
       }
     }
 
@@ -173,9 +195,12 @@ export class WebRTCService {
       }
     });
 
+    console.log('Final localStream tracks:', this.localStream.getTracks().map(t => t.kind + ':' + t.label));
+    
     // Emit updated stream
     const newStream = new MediaStream(this.localStream.getTracks());
     this.onRemoteStream?.('local', newStream);
+    console.log('toggleVideo completed, new stream emitted');
   }
 
   public async toggleAudio(enabled: boolean) {
@@ -235,8 +260,15 @@ export class WebRTCService {
 
       this.peerConnections.forEach(pc => {
         const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) sender.replaceTrack(screenTrack);
+        if (sender) {
+          sender.replaceTrack(screenTrack).catch(error => {
+            console.error('Failed to replace video track for screen share:', error);
+          });
+        }
       });
+
+      // Notify other participants about screen sharing
+      this.socket.emit('screen-share-started', { roomId: this.roomId });
 
       this.localStream.getVideoTracks().forEach(t => {
         this.localStream!.removeTrack(t);
@@ -248,20 +280,24 @@ export class WebRTCService {
 
       screenTrack.onended = async () => {
         try {
-          const cam = await navigator.mediaDevices.getUserMedia({ video: true });
-          const camTrack = cam.getVideoTracks()[0];
+          console.log('Screen track ended, cleaning up...');
+          
+          // Notify other participants that screen sharing stopped
+          this.socket.emit('screen-share-stopped', { roomId: this.roomId });
 
-          this.peerConnections.forEach(pc => {
-            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (sender) sender.replaceTrack(camTrack);
-          });
-
+          // Remove and stop the screen track
           this.localStream!.removeTrack(screenTrack);
           screenTrack.stop();
-          this.localStream!.addTrack(camTrack);
-          this.onRemoteStream?.('local', new MediaStream(this.localStream.getTracks()));
+          
+          // Reset current video track
+          if (this.currentVideoTrack === screenTrack) {
+            this.currentVideoTrack = null;
+            console.log('Reset currentVideoTrack to null after screen ended');
+          }
+          
+          console.log('Screen track cleanup completed');
         } catch (error) {
-          console.error('Failed to restore camera after screen share:', error);
+          console.error('Failed to cleanup after screen share ended:', error);
         }
       };
 
@@ -293,17 +329,121 @@ export class WebRTCService {
     }
   }
 
-  private replaceTrack(oldTrack: MediaStreamTrack, newTrack: MediaStreamTrack) {
-    this.peerConnections.forEach(pc => {
-      const sender = pc.getSenders().find(s => s.track === oldTrack);
-      if (sender) {
-        const userEntry = [...this.peerConnections.entries()].find(([_, v]) => v === pc);
-        console.log(`Replacing track in peer connection for user: ${userEntry?.[0] || 'unknown'}`);
-        console.log('Old track:', oldTrack);
-        console.log('New track:', newTrack);
-        sender.replaceTrack(newTrack);
+  public async stopScreenShare(): Promise<void> {
+    console.log('=== WebRTC stopScreenShare called ===');
+    if (!this.localStream) {
+      console.log('No localStream available for stopScreenShare');
+      return;
+    }
+    
+    try {
+      // Get current screen share tracks and stop them
+      const videoTracks = this.localStream.getVideoTracks();
+      console.log('Current video tracks before stopping screen share:', videoTracks.map(t => t.kind + ':' + t.label));
+      
+      // Stop and remove screen share tracks
+      let screenTrackFound = false;
+      videoTracks.forEach(track => {
+        // Screen share tracks usually have labels containing "screen" or have contentHint
+        if (track.label.toLowerCase().includes('screen') || 
+            track.contentHint === 'detail' || 
+            track.label.toLowerCase().includes('display')) {
+          console.log('Removing screen track:', track.label);
+          this.localStream!.removeTrack(track);
+          track.stop();
+          screenTrackFound = true;
+          // Reset current video track if it was the screen share track
+          if (this.currentVideoTrack === track) {
+            this.currentVideoTrack = null;
+            console.log('Reset currentVideoTrack to null');
+          }
+        }
+      });
+      
+      // If no specific screen track found, remove all video tracks as fallback
+      if (!screenTrackFound && videoTracks.length > 0) {
+        console.log('No screen track identified by label, removing all video tracks');
+        videoTracks.forEach(track => {
+          console.log('Removing video track:', track.label);
+          this.localStream!.removeTrack(track);
+          track.stop();
+        });
+        this.currentVideoTrack = null;
       }
-    });
+
+      // Notify other participants that screen sharing stopped
+      this.socket.emit('screen-share-stopped', { roomId: this.roomId });
+      
+      console.log('Tracks after screen share cleanup:', this.localStream.getTracks().map(t => `${t.kind}:${t.label}`));
+      console.log('=== WebRTC stopScreenShare completed ===');
+    } catch (error) {
+      console.error('Failed to stop screen share:', error);
+      throw error;
+    }
+  }
+
+  public async restoreCameraAfterScreenShare(): Promise<void> {
+    console.log('=== Restoring camera after screen share ===');
+    
+    try {
+      // Get fresh camera stream
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const cameraTrack = stream.getVideoTracks()[0];
+      console.log('Got fresh camera track:', cameraTrack.label);
+      
+      // Ensure we have a clean slate - remove any existing video tracks
+      const existingVideoTracks = this.localStream!.getVideoTracks();
+      existingVideoTracks.forEach(track => {
+        console.log('Removing existing video track:', track.label);
+        this.localStream!.removeTrack(track);
+        track.stop();
+      });
+      
+      // Add new camera track to local stream
+      this.localStream!.addTrack(cameraTrack);
+      this.currentVideoTrack = cameraTrack;
+      console.log('Added camera track to localStream');
+      
+      // Replace in all peer connections with proper error handling
+      const replacePromises: Promise<void>[] = [];
+      this.peerConnections.forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video' || s.track === null);
+        if (sender) {
+          console.log('Replacing video track in peer connection');
+          const replacePromise = sender.replaceTrack(cameraTrack).catch(error => {
+            console.error('Failed to replace track:', error);
+            // Don't throw, just log the error
+          });
+          replacePromises.push(replacePromise);
+        } else {
+          // If no sender found, add the track
+          console.log('No video sender found, adding track to peer connection');
+          try {
+            pc.addTrack(cameraTrack, this.localStream!);
+          } catch (error) {
+            console.error('Failed to add track to peer connection:', error);
+          }
+        }
+      });
+      
+      // Wait for all track replacements to complete
+      await Promise.all(replacePromises);
+      console.log('All peer connection track replacements completed');
+      
+      // Create fresh stream and emit it to force UI update
+      const newStream = new MediaStream(this.localStream!.getTracks());
+      console.log('Emitting new stream with tracks:', newStream.getTracks().map(t => `${t.kind}:${t.label}`));
+      this.onRemoteStream?.('local', newStream);
+      
+      // Small delay to ensure everything is properly set up
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('Camera restored and stream emitted successfully');
+      
+    } catch (error) {
+      console.error('Failed to restore camera:', error);
+      throw error;
+    }
   }
 
   public disconnect() {

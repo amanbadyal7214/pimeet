@@ -6,14 +6,16 @@ declare global {
 }
 import React from 'react';
 import Avatar from '../ui/Avatar';
-import { MicOff, VideoOff, Pin } from 'lucide-react';
+import { MicOff, VideoOff, Pin, Monitor } from 'lucide-react';
 
 interface ParticipantThumbnailProps {
   name: string;
   role: string;
   videoStream?: MediaStream;
+  screenShareStream?: MediaStream;
   videoEnabled: boolean;
   audioEnabled: boolean;
+  isScreenSharing?: boolean;
   isLocal?: boolean;
   onPin?: () => void;
   isPinned?: boolean;
@@ -23,13 +25,16 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   name,
   role,
   videoStream,
+  screenShareStream,
   videoEnabled,
   audioEnabled,
+  isScreenSharing = false,
   isLocal = false,
   onPin,
   isPinned = false,
 }) => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const screenShareRef = React.useRef<HTMLVideoElement>(null);
   const audioRef = React.useRef<HTMLAudioElement>(null);
 
   React.useEffect(() => {
@@ -42,6 +47,18 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       }
     }
   }, [videoStream, videoEnabled]);
+
+  // Screen share effect
+  React.useEffect(() => {
+    if (screenShareRef.current) {
+      if (isScreenSharing && screenShareStream) {
+        screenShareRef.current.srcObject = screenShareStream;
+        screenShareRef.current.play().catch(() => {});
+      } else {
+        screenShareRef.current.srcObject = null;
+      }
+    }
+  }, [screenShareStream, isScreenSharing]);
 
   React.useEffect(() => {
     if (audioRef.current) {
@@ -60,14 +77,28 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         isPinned ? 'ring-4 ring-neutral-300' : ''
       }`}
     >
-      {/* Video or Avatar */}
-      {videoEnabled && videoStream ? (
+      {/* Video or Screen Share or Avatar */}
+      {isLocal && isScreenSharing && screenShareStream ? (
+        // Local screen share - use dedicated screenShareStream, no mirror effect
+        <video
+          ref={screenShareRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className="absolute inset-0 w-full h-full object-contain rounded-xl bg-gray-900"
+        />
+      ) : videoEnabled && videoStream ? (
+        // Regular video (camera) OR remote screen share
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={isLocal}
-          className="absolute inset-0 w-full h-full object-cover rounded-xl"
+          className={`absolute inset-0 w-full h-full ${
+            isScreenSharing 
+              ? 'object-contain bg-gray-900' 
+              : 'object-cover scale-x-[-1]'
+          } rounded-xl`}
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-tr from-gray-800 via-cyan-800 to-gray-800 flex items-center justify-center rounded-xl">
@@ -88,6 +119,11 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
                 const match = name.match(/^(.*) \((\d+)\)$/);
                 return (match ? match[1] : name) + (isLocal ? ' (You)' : '');
               })()}
+              {isScreenSharing && (
+                <span className="ml-2 text-xs bg-blue-600 px-2 py-0.5 rounded-full">
+                  Screen
+                </span>
+              )}
             </div>
             <div className="text-xs text-gray-300">{role}</div>
           </div>
@@ -109,6 +145,7 @@ const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         <div className="flex space-x-2 mt-1">
           {!audioEnabled && <MicOff className="w-4 h-4 text-red-500" aria-label="Mic Off" />}
           {!videoEnabled && <VideoOff className="w-4 h-4 text-red-500" aria-label="Video Off" />}
+          {isScreenSharing && <Monitor className="w-4 h-4 text-blue-400" aria-label="Screen Sharing" />}
         </div>
       </div>
     </div>

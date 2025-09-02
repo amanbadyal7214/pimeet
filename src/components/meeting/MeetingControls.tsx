@@ -5,7 +5,9 @@ import { Mic, MicOff, Video, VideoOff, Phone, ScreenShare, MessageSquare, MoreVe
 interface MeetingControlsProps {
   audioEnabled: boolean;
   videoEnabled: boolean;
+  isScreenSharing: boolean;
   isChatOpen: boolean;
+  unreadMessagesCount?: number;
   participantCount: number;
   meetingTime: string;
   displayName?: string;
@@ -22,7 +24,9 @@ interface MeetingControlsProps {
 const MeetingControls: React.FC<MeetingControlsProps> = ({
   audioEnabled,
   videoEnabled,
+  isScreenSharing,
   isChatOpen,
+  unreadMessagesCount = 0,
   participantCount,
   meetingTime,
   displayName,
@@ -63,7 +67,10 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         </button>
         
         <button
-          onClick={onToggleVideo}
+          onClick={() => {
+            console.log('Video button clicked, videoEnabled:', videoEnabled);
+            onToggleVideo();
+          }}
           className={`p-3 rounded-full ${
             videoEnabled ? 'bg-gray-200 hover:bg-gray-300' : 'bg-red-100 text-red-600 hover:bg-red-200'
           }`}
@@ -72,24 +79,34 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         </button>
         
         <button
-          onClick={onShareScreen}
-          className="p-3 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => {
+            console.log('Screen share button clicked, isScreenSharing:', isScreenSharing);
+            onShareScreen();
+          }}
+          className={`p-3 rounded-full ${
+            isScreenSharing ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' : 'bg-gray-200 hover:bg-gray-300'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
           title={
             /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
               ? 'Screen sharing on mobile - tap to start'
-              : 'Share your screen'
+              : isScreenSharing ? 'Stop sharing screen' : 'Share your screen'
           }
         >
-          <ScreenShare size={20} />
+          <ScreenShare size={20} className={isScreenSharing ? 'text-blue-600' : ''} />
         </button>
         
         <button
           onClick={onToggleChat}
-          className={`p-3 rounded-full ${
+          className={`relative p-3 rounded-full ${
             isChatOpen ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' : 'bg-gray-200 hover:bg-gray-300'
           }`}
         >
           <MessageSquare size={20} />
+          {unreadMessagesCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center min-w-[20px]">
+              {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+            </span>
+          )}
         </button>
         
         <button
