@@ -12,7 +12,7 @@ import Button from "../components/ui/Button";
 import { formatTime } from "../utils/meeting";
 import { useWebRTC } from "../hooks/useWebRTC";
 import ParticipantThumbnail from "../components/meeting/ParticipantThumbnail";
-import TaskList from "../components/meeting/TaskList";
+import ServiceRequestPanel from "../components/meeting/ServiceRequestPanel";
 import Avatar from "../components/ui/Avatar";
 import { Drawer, Modal } from "antd";
 import { SocketService } from "../services/socket";
@@ -46,15 +46,72 @@ const MeetingPage: React.FC = () => {
   // Chat-related state
   const [messages, setMessages] = useState<any[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  
+  // Service request state
+  const [pendingServiceRequests, setPendingServiceRequests] = useState(0);
+  
+  // Kicked users state (to prevent rejoining on same day)
+  const [kickedUsers, setKickedUsers] = useState<Set<string>>(new Set());
+  const [rejoinRequests, setRejoinRequests] = useState<any[]>([]);
+  const [showRejoinModal, setShowRejoinModal] = useState(false);
 
 
   const pinnedVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Check if user was kicked in last 2 hours
   useEffect(() => {
-    const socketUrl = "http://localhost:3001"; // Adjust if needed
+    if (studentId && meetingId) {
+      const kickedTime = localStorage.getItem(`kicked_${meetingId}_${studentId}_time`);
+      
+      if (kickedTime) {
+        const kickTime = new Date(kickedTime);
+        const currentTime = new Date();
+        const timeDifference = (currentTime.getTime() - kickTime.getTime()) / (1000 * 60 * 60); // Hours
+        
+        if (timeDifference < 2) {
+          const remainingMinutes = Math.ceil((2 - timeDifference) * 60);
+          alert(`You have been removed from this meeting and cannot rejoin for ${remainingMinutes} minutes.`);
+          
+          // Redirect based on user type
+          if (studentId === "trainer") {
+            window.location.href =
+              "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+          } else if (studentId) {
+            window.location.href =
+              "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+          } else {
+            window.location.href = "/";
+          }
+          return;
+        } else {
+          // 2 hours have passed, remove the restriction
+          localStorage.removeItem(`kicked_${meetingId}_${studentId}_time`);
+        }
+      }
+    }
+  }, [studentId, meetingId]);
+
+  useEffect(() => {
+    const socketUrl = "https://pi.comsdesk.com"; // Adjust if needed
     SocketService.getInstance().connect(socketUrl);
-  }, []);
+    
+    // Add cleanup on page unload
+    const handleBeforeUnload = () => {
+      const socket = SocketService.getInstance().getSocket();
+      if (studentId === "trainer" && socket) {
+        // If trainer is leaving via browser close, end the meeting
+        socket.emit('end-meeting', { roomId: meetingId });
+      }
+      clearMeetingLocalStorage();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [studentId, meetingId]);
 
   // Handle incoming chat messages at the meeting page level
   useEffect(() => {
@@ -73,12 +130,220 @@ const MeetingPage: React.FC = () => {
       }
     };
 
+    const handleKickedFromMeeting = (payload: any) => {
+      alert(`You have been removed from the meeting by ${payload.kickerName}`);
+      
+      // Store kicked time in localStorage for 2-hour restriction
+      const kickTime = new Date().toISOString();
+      localStorage.setItem(`kicked_${meetingId}_${studentId}_time`, kickTime);
+      
+      // Redirect based on user type
+      if (studentId === "trainer") {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+      } else if (studentId) {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+      } else {
+        window.location.href = "/";
+      }
+    };
+
+    const handleUserKicked = (payload: any) => {
+      console.log(`User ${payload.userName} was kicked by ${payload.kickerName}`);
+      
+      // Add to kicked users set
+      setKickedUsers(prev => new Set([...prev, payload.userId]));
+      
+      // Clear pinned participant if the kicked user was pinned
+      if (pinnedParticipantId === payload.userId) {
+        setPinnedParticipantId(null);
+      }
+      
+      // Remove kicked user from selected participants if they were selected
+      setSelectedParticipants((prev) => 
+        prev.filter((userId) => userId !== payload.userId)
+      );
+    };
+
+    const handleRejoinRequest = (payload: any) => {
+      if (studentId === "trainer") {
+        setRejoinRequests(prev => [...prev, payload]);
+        setShowRejoinModal(true);
+        console.log(`Rejoin request from ${payload.displayName}`);
+      }
+    };
+
+    const handleKickPermissionRequired = (payload: any) => {
+      const message = payload.remainingTime 
+        ? `${payload.message}\nRemaining time: ${payload.remainingTime} minutes`
+        : payload.message;
+      
+      alert(message);
+      
+      // Show countdown if remaining time exists
+      if (payload.remainingTime) {
+        let remainingMinutes = payload.remainingTime;
+        const countdownInterval = setInterval(() => {
+          remainingMinutes--;
+          if (remainingMinutes <= 0) {
+            clearInterval(countdownInterval);
+            alert("2-hour restriction has expired. You can now try to rejoin the meeting.");
+          } else if (remainingMinutes % 10 === 0) {
+            // Show reminder every 10 minutes
+            console.log(`Remaining time to rejoin: ${remainingMinutes} minutes`);
+          }
+        }, 60000); // Check every minute
+        
+        // Store interval ID to clear it later if needed
+        (window as any).rejoinCountdownInterval = countdownInterval;
+      }
+      
+      // Keep showing the alert until trainer approves or time expires
+      const checkApproval = setInterval(() => {
+        // This will be cleared when rejoin is approved or denied
+      }, 5000);
+      
+      // Store interval ID to clear it later if needed
+      (window as any).rejoinCheckInterval = checkApproval;
+    };
+
+    const handleRejoinApproved = (payload: any) => {
+      alert(payload.message);
+      // Clear any pending intervals
+      if ((window as any).rejoinCheckInterval) {
+        clearInterval((window as any).rejoinCheckInterval);
+      }
+      if ((window as any).rejoinCountdownInterval) {
+        clearInterval((window as any).rejoinCountdownInterval);
+      }
+      
+      // Clear kicked time from localStorage
+      localStorage.removeItem(`kicked_${meetingId}_${studentId}_time`);
+      
+      // Reload the page to rejoin
+      window.location.reload();
+    };
+
+    const handleRejoinDenied = (payload: any) => {
+      alert(payload.message);
+      // Clear any pending intervals
+      if ((window as any).rejoinCheckInterval) {
+        clearInterval((window as any).rejoinCheckInterval);
+      }
+      if ((window as any).rejoinCountdownInterval) {
+        clearInterval((window as any).rejoinCountdownInterval);
+      }
+      
+      // Redirect back
+      if (studentId === "trainer") {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+      } else if (studentId) {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+      } else {
+        window.location.href = "/";
+      }
+    };
+
+    const handleMeetingEnded = (payload: any) => {
+      alert(payload.message);
+      // Clear all localStorage data for this meeting
+      clearMeetingLocalStorage();
+      
+      // Redirect based on user type
+      if (studentId === "trainer") {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+      } else if (studentId) {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+      } else {
+        window.location.href = "/";
+      }
+    };
+
+    const handleTrainerLeft = (payload: any) => {
+      alert(payload.message);
+      // Clear kicked user restrictions when trainer leaves
+      clearMeetingLocalStorage();
+    };
+
+    const handleEntryPermissionRequired = (payload: any) => {
+      alert(payload.message);
+      // Show waiting message
+      console.log("Waiting for trainer approval...");
+    };
+
+    const handleEntryApproved = (payload: any) => {
+      alert(payload.message);
+      // Don't reload page, just continue with current connection
+      console.log("✅ Entry approved, joining meeting...");
+    };
+
+    const handleEntryDenied = (payload: any) => {
+      alert(payload.message);
+      // Redirect based on user type
+      if (studentId === "trainer") {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+      } else if (studentId) {
+        window.location.href =
+          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+      } else {
+        window.location.href = "/";
+      }
+    };
+
+    const handleEntryRequest = (_payload: any) => {
+      // Only trainers should handle entry requests
+      if (studentId === "trainer") {
+        setPendingServiceRequests(prev => prev + 1);
+      }
+    };
+
+    const handleEntryRequestProcessed = () => {
+      // Decrease count when request is processed (approved/denied)
+      if (studentId === "trainer") {
+        setPendingServiceRequests(prev => Math.max(0, prev - 1));
+      }
+    };
+
     socket.on('chat-message', handleIncomingMessage);
+    socket.on('kicked-from-meeting', handleKickedFromMeeting);
+    socket.on('user-kicked', handleUserKicked);
+    socket.on('rejoin-request', handleRejoinRequest);
+    socket.on('kick-permission-required', handleKickPermissionRequired);
+    socket.on('rejoin-approved', handleRejoinApproved);
+    socket.on('rejoin-denied', handleRejoinDenied);
+    socket.on('meeting-ended', handleMeetingEnded);
+    socket.on('trainer-left', handleTrainerLeft);
+    socket.on('entry-permission-required', handleEntryPermissionRequired);
+    socket.on('entry-approved', handleEntryApproved);
+    socket.on('entry-denied', handleEntryDenied);
+    socket.on('entry-request', handleEntryRequest);
+    socket.on('approve-entry', handleEntryRequestProcessed);
+    socket.on('deny-entry', handleEntryRequestProcessed);
 
     return () => {
       socket.off('chat-message', handleIncomingMessage);
+      socket.off('kicked-from-meeting', handleKickedFromMeeting);
+      socket.off('user-kicked', handleUserKicked);
+      socket.off('rejoin-request', handleRejoinRequest);
+      socket.off('kick-permission-required', handleKickPermissionRequired);
+      socket.off('rejoin-approved', handleRejoinApproved);
+      socket.off('rejoin-denied', handleRejoinDenied);
+      socket.off('meeting-ended', handleMeetingEnded);
+      socket.off('trainer-left', handleTrainerLeft);
+      socket.off('entry-permission-required', handleEntryPermissionRequired);
+      socket.off('entry-approved', handleEntryApproved);
+      socket.off('entry-denied', handleEntryDenied);
+      socket.off('entry-request', handleEntryRequest);
+      socket.off('approve-entry', handleEntryRequestProcessed);
+      socket.off('deny-entry', handleEntryRequestProcessed);
     };
-  }, [isChatDrawerOpen]);
+  }, [isChatDrawerOpen, studentId, meetingId, pinnedParticipantId]);
 
   const {
     localStream,
@@ -126,6 +391,11 @@ const MeetingPage: React.FC = () => {
 
     const isTrainer = studentId === "trainer";
     remoteUserDisplayNames.forEach((name, userId) => {
+      // Skip kicked users
+      if (kickedUsers.has(userId)) {
+        return;
+      }
+      
       let display = name;
       let id = "";
       const match = name.match(/^(.*) \((\d+)\)$/);
@@ -167,6 +437,7 @@ const MeetingPage: React.FC = () => {
     localVideoEnabled,
     screenShareStream,
     isLocalScreenSharing,
+    kickedUsers,
   ]);
 
   // Detect new participant join and open chat drawer (only for trainer)
@@ -244,6 +515,16 @@ const MeetingPage: React.FC = () => {
 
   // ✅ Leave redirect logic
   const confirmLeaveMeeting = () => {
+    const socket = SocketService.getInstance().getSocket();
+    
+    if (studentId === "trainer" && socket) {
+      // If trainer is leaving, end the meeting for everyone
+      socket.emit('end-meeting', { roomId: meetingId });
+    }
+    
+    // Clear localStorage for this user
+    clearMeetingLocalStorage();
+    
     if (studentId === "trainer") {
       window.location.href =
         "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
@@ -273,10 +554,91 @@ const MeetingPage: React.FC = () => {
       });
     }
   };
-  const handleShowInfo = () => setIsInfoDrawerOpen(true);
+  const handleShowInfo = () => {
+    setIsInfoDrawerOpen(true);
+    // Reset service request count when opening the panel
+    setPendingServiceRequests(0);
+  };
 
   const handlePinParticipant = (userId: string) => {
     setPinnedParticipantId(userId === pinnedParticipantId ? null : userId);
+  };
+
+  // Clear meeting-related localStorage data
+  const clearMeetingLocalStorage = () => {
+    if (meetingId && studentId) {
+      // Clear kicked user time data
+      localStorage.removeItem(`kicked_${meetingId}_${studentId}_time`);
+      
+      // Clear any other meeting-related data if needed
+      console.log(`🗑️ Cleared localStorage for meeting ${meetingId}, user ${studentId}`);
+    }
+  };
+
+  // Handle kick participant (only trainers can kick)
+  const handleKickParticipant = (participantUserId: string, participantName: string) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (!socket || studentId !== "trainer") {
+      console.log("Only trainers can kick participants");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to remove ${participantName} from the meeting?`)) {
+      // Clear pinned participant if the kicked user was pinned
+      if (pinnedParticipantId === participantUserId) {
+        setPinnedParticipantId(null);
+      }
+
+      // Immediately remove from selectedParticipants for instant UI feedback
+      setSelectedParticipants((prev) => 
+        prev.filter((userId) => userId !== participantUserId)
+      );
+
+      // Add to kicked users for immediate UI update
+      setKickedUsers(prev => new Set([...prev, participantUserId]));
+
+      socket.emit('kick-participant', {
+        roomId: meetingId,
+        targetUserId: participantUserId,
+        kickerName: displayName
+      });
+
+      console.log(`Kicked participant: ${participantName} (${participantUserId})`);
+    }
+  };
+
+  // Handle approve rejoin request
+  const handleApproveRejoin = (request: any) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && studentId === "trainer") {
+      socket.emit('approve-rejoin', {
+        roomId: meetingId,
+        displayName: request.displayName,
+        userId: request.userId
+      });
+
+      // Remove from pending requests
+      setRejoinRequests(prev => prev.filter(r => r.userId !== request.userId));
+      
+      console.log(`Approved rejoin for ${request.displayName}`);
+    }
+  };
+
+  // Handle deny rejoin request
+  const handleDenyRejoin = (request: any) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && studentId === "trainer") {
+      socket.emit('deny-rejoin', {
+        roomId: meetingId,
+        displayName: request.displayName,
+        userId: request.userId
+      });
+
+      // Remove from pending requests
+      setRejoinRequests(prev => prev.filter(r => r.userId !== request.userId));
+      
+      console.log(`Denied rejoin for ${request.displayName}`);
+    }
   };
 
   // ✅ Attendance API
@@ -492,6 +854,7 @@ const markAttendance = async () => {
                 isScreenSharing={isLocalScreenSharing}
                 isChatOpen={isChatDrawerOpen}
                 unreadMessagesCount={unreadMessagesCount}
+                pendingServiceRequests={pendingServiceRequests}
                 participantCount={participants.length}
                 meetingTime={formatTime(meetingTime)}
                 displayName={displayName}
@@ -595,15 +958,15 @@ const markAttendance = async () => {
         width={window.innerWidth < 600 ? 320 : 400}
         styles={{
           body: { 
-            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
+            background: 'linear-gradient(135deg, #f8fafc, #e2e8f0)',
             backdropFilter: 'blur(20px)',
             padding: 0
           },
           header: {
-            background: 'rgba(15, 23, 42, 0.9)',
+            background: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(20px)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            color: 'white'
+            borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+            color: '#1e293b'
           }
         }}
       >
@@ -623,7 +986,7 @@ const markAttendance = async () => {
         width={window.innerWidth < 600 ? 320 : 400}
         styles={{
           body: { 
-            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
+            background: 'linear-gradient(135deg, #f8fafc, #e2e8f0)',
             backdropFilter: 'blur(20px)',
             padding: 0,
             height: '100%'
@@ -632,7 +995,11 @@ const markAttendance = async () => {
         closable={false}
       >
         <div style={{ height: "100%" }}>
-          <TaskList onClose={() => setIsInfoDrawerOpen(false)} />
+          <ServiceRequestPanel 
+            onClose={() => setIsInfoDrawerOpen(false)} 
+            isTrainer={studentId === "trainer"}
+            meetingId={meetingId}
+          />
         </div>
       </Drawer>
 
@@ -776,6 +1143,25 @@ const markAttendance = async () => {
                           <span className="text-red-400 text-sm">🚫</span>
                         )}
                       </div>
+                      
+                      {/* Kick button - only show for trainer and only for non-trainer participants */}
+                      {participants.find((p) => p.userId === "local")?.role === "trainer" && 
+                       participant.role !== "trainer" && 
+                       participant.userId !== "local" && (
+                        <button
+                          onClick={() => {
+                            const participantName = (() => {
+                              const match = participant.name.match(/^(.*) \((\d+)\)$/);
+                              return match ? match[1] : participant.name;
+                            })();
+                            handleKickParticipant(participant.userId, participantName);
+                          }}
+                          className="p-1.5 rounded-full bg-red-500/20 hover:bg-red-500/40 transition-colors duration-200 group"
+                          title="Remove participant"
+                        >
+                          <span className="text-red-400 group-hover:text-red-300 text-sm">🚫</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -862,6 +1248,75 @@ const markAttendance = async () => {
           </p>
         </div>
       </Modal>
+
+      {/* Rejoin Requests Modal (Trainer only) */}
+      {studentId === "trainer" && (
+        <Modal
+          title={
+            <div className="text-center">
+              <div className="bg-blue-500/20 rounded-full p-3 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                </svg>
+              </div>
+              <span className="text-xl font-bold text-white">Rejoin Requests</span>
+            </div>
+          }
+          open={showRejoinModal && rejoinRequests.length > 0}
+          onCancel={() => setShowRejoinModal(false)}
+          footer={null}
+          styles={{
+            content: {
+              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '24px'
+            }
+          }}
+          width={500}
+          maskStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+          destroyOnClose
+        >
+          <div className="space-y-4">
+            {rejoinRequests.map((request, index) => (
+              <div key={index} className="bg-white/10 rounded-2xl p-4 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-blue-500/20 rounded-full p-2">
+                      <span className="text-blue-400">👤</span>
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">{request.displayName}</div>
+                      <div className="text-white/60 text-sm">
+                        Wants to rejoin the meeting
+                        {request.remainingTime && (
+                          <span className="block text-orange-400 text-xs mt-1">
+                            ⏰ Can rejoin in {request.remainingTime} minutes without approval
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleApproveRejoin(request)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors"
+                    >
+                      ✅ Approve
+                    </button>
+                    <button
+                      onClick={() => handleDenyRejoin(request)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
+                    >
+                      ❌ Deny
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

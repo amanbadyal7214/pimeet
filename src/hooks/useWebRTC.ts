@@ -23,8 +23,8 @@ export function useWebRTC(roomId: string) {
 
   useEffect(() => {
     const socketService = SocketService.getInstance();
-    //const socket = socketService.connect('https://pi.comsdesk.com'); // Adjust URL as needed
-     const socket = socketService.connect('http://localhost:3001');
+    const socket = socketService.connect('https://pi.comsdesk.com'); // Adjust URL as needed
+     //const socket = socketService.connect('http://localhost:3001');
     socketRef.current = socket;
 
     webRTCRef.current = new WebRTCService(socket, roomId, (userId, stream) => {
@@ -44,8 +44,19 @@ export function useWebRTC(roomId: string) {
         const params = new URLSearchParams(window.location.search);
         const displayName = params.get('name') || 'Host';
         const studentId = params.get('id') || '';
-        // Combine name and studentId for signaling
-        const fullName = studentId ? `${displayName} (${studentId})` : displayName;
+        
+        // Create proper display name with trainer detection
+        let fullName;
+        if (studentId === 'trainer') {
+          fullName = `${displayName} (trainer)`;
+        } else if (studentId) {
+          fullName = `${displayName} (${studentId})`;
+        } else {
+          fullName = displayName;
+        }
+        
+        console.log(`🔗 Connecting with name: ${fullName}, studentId: ${studentId}`);
+        
         const stream = await webRTCRef.current?.joinRoom(fullName);
         if (stream) {
           setLocalStream(new MediaStream(stream.getTracks()));
@@ -73,6 +84,27 @@ export function useWebRTC(roomId: string) {
     });
 
     socket.on('user-left', ({ userId }: { userId: string }) => {
+      setRemoteStreams((prev) => {
+        const updated = new Map(prev);
+        updated.delete(userId);
+        return updated;
+      });
+
+      setRemoteUserDisplayNames((prev) => {
+        const updated = new Map(prev);
+        updated.delete(userId);
+        return updated;
+      });
+
+      setRemoteUserStatus((prev) => {
+        const updated = new Map(prev);
+        updated.delete(userId);
+        return updated;
+      });
+    });
+
+    // Handle kicked user - same cleanup as user-left
+    socket.on('user-kicked', ({ userId }: { userId: string }) => {
       setRemoteStreams((prev) => {
         const updated = new Map(prev);
         updated.delete(userId);

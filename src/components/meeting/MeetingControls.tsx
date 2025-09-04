@@ -8,6 +8,7 @@ interface MeetingControlsProps {
   isScreenSharing: boolean;
   isChatOpen: boolean;
   unreadMessagesCount?: number;
+  pendingServiceRequests?: number;
   participantCount: number;
   meetingTime: string;
   displayName?: string;
@@ -27,6 +28,7 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
   isScreenSharing,
   isChatOpen,
   unreadMessagesCount = 0,
+  pendingServiceRequests = 0,
   // participantCount,
   // meetingTime,
   // displayName,
@@ -152,6 +154,11 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         className="group relative p-4 rounded-2xl bg-white/20 hover:bg-white/30 text-white transition-all duration-300 transform hover:scale-110"
       >
         <MoreVertical size={20} className="drop-shadow-sm" />
+        {pendingServiceRequests > 0 && (
+          <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center min-w-[24px] shadow-lg animate-pulse">
+            {pendingServiceRequests > 99 ? '99+' : pendingServiceRequests}
+          </span>
+        )}
         <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <div className="bg-black/80 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap">
             More options
