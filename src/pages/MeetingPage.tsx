@@ -76,10 +76,10 @@ const MeetingPage: React.FC = () => {
           // Redirect based on user type
           if (studentId === "trainer") {
             window.location.href =
-              "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+              "https://project.pisofterp.com/pipl/";
           } else if (studentId) {
             window.location.href =
-              "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+              "https://project.pisofterp.com/pipl/";
           } else {
             window.location.href = "/";
           }
@@ -140,10 +140,10 @@ const MeetingPage: React.FC = () => {
       // Redirect based on user type
       if (studentId === "trainer") {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+          "https://project.pisofterp.com/pipl/";
       } else if (studentId) {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+          "https://project.pisofterp.com/pipl/";
       } else {
         window.location.href = "/";
       }
@@ -238,10 +238,10 @@ const MeetingPage: React.FC = () => {
       // Redirect back
       if (studentId === "trainer") {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+          "https://project.pisofterp.com/pipl/";
       } else if (studentId) {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+          "https://project.pisofterp.com/pipl/";
       } else {
         window.location.href = "/";
       }
@@ -255,10 +255,10 @@ const MeetingPage: React.FC = () => {
       // Redirect based on user type
       if (studentId === "trainer") {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+          "https://project.pisofterp.com/pipl/";
       } else if (studentId) {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+          "https://project.pisofterp.com/pipl/";
       } else {
         window.location.href = "/";
       }
@@ -287,10 +287,10 @@ const MeetingPage: React.FC = () => {
       // Redirect based on user type
       if (studentId === "trainer") {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+          "https://project.pisofterp.com/pipl/";
       } else if (studentId) {
         window.location.href =
-          "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+          "https://project.pisofterp.com/pipl/";
       } else {
         window.location.href = "/";
       }
@@ -527,10 +527,10 @@ const MeetingPage: React.FC = () => {
     
     if (studentId === "trainer") {
       window.location.href =
-        "https://project.pisofterp.com/pipl/createMeeting/createMeeting";
+        "https://project.pisofterp.com/pipl/";
     } else if (studentId) {
       window.location.href =
-        "https://project.pisofterp.com/pipl/createMeeting/ongoingClasses";
+        "https://project.pisofterp.com/pipl/";
     } else {
       navigate("/"); // fallback for guests without ID
     }
