@@ -49,6 +49,8 @@ const MeetingPage: React.FC = () => {
   
   // Service request state
   const [pendingServiceRequests, setPendingServiceRequests] = useState(0);
+  const [entryRequests, setEntryRequests] = useState<any[]>([]);
+  const [autoApproveEntries, setAutoApproveEntries] = useState(false);
   
   // Kicked users state (to prevent rejoining on same day)
   const [kickedUsers, setKickedUsers] = useState<Set<string>>(new Set());
@@ -296,9 +298,38 @@ const MeetingPage: React.FC = () => {
       }
     };
 
-    const handleEntryRequest = (_payload: any) => {
+    const handleEntryRequest = (payload: any) => {
       // Only trainers should handle entry requests
       if (studentId === "trainer") {
+        console.log('Entry request received in MeetingPage:', payload);
+        
+        // Handle auto-approve if enabled
+        if (autoApproveEntries) {
+          console.log('Auto-approving entry for:', payload.displayName);
+          const socket = SocketService.getInstance().getSocket();
+          if (socket && meetingId) {
+            socket.emit('approve-entry', {
+              roomId: meetingId,
+              userId: payload.userId
+            });
+            console.log('Sent auto-approve for userId:', payload.userId, 'roomId:', meetingId);
+          }
+          return;
+        }
+        
+        // Store the entry request data
+        setEntryRequests(prev => {
+          // Check if request already exists
+          const exists = prev.find(req => req.userId === payload.userId);
+          if (exists) return prev;
+          
+          return [...prev, {
+            userId: payload.userId,
+            displayName: payload.displayName,
+            timestamp: new Date().toISOString()
+          }];
+        });
+        
         setPendingServiceRequests(prev => prev + 1);
       }
     };
@@ -440,16 +471,13 @@ const MeetingPage: React.FC = () => {
     kickedUsers,
   ]);
 
-  // Detect new participant join and open chat drawer (only for trainer)
+  // Track participant count for potential future use
   const prevParticipantsCountRef = React.useRef(participants.length);
 
   useEffect(() => {
-    // Only open chat automatically for trainer when new participant joins
-    if (participants.length > prevParticipantsCountRef.current && studentId === "trainer") {
-      setIsChatDrawerOpen(true);
-    }
+    // Update participant count reference without auto-opening chat
     prevParticipantsCountRef.current = participants.length;
-  }, [participants, studentId]);
+  }, [participants]);
 
   useEffect(() => {
     const pinned = participants.find(
@@ -558,6 +586,70 @@ const MeetingPage: React.FC = () => {
     setIsInfoDrawerOpen(true);
     // Reset service request count when opening the panel
     setPendingServiceRequests(0);
+  };
+
+  // Functions to handle entry requests from ServiceRequestPanel
+  const handleApproveEntry = (request: any) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && meetingId) {
+      socket.emit('approve-entry', {
+        roomId: meetingId,
+        userId: request.userId
+      });
+
+      // Remove from pending requests
+      setEntryRequests(prev => prev.filter(req => req.userId !== request.userId));
+    }
+  };
+
+  const handleDenyEntry = (request: any) => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && meetingId) {
+      socket.emit('deny-entry', {
+        roomId: meetingId,
+        userId: request.userId
+      });
+
+      // Remove from pending requests
+      setEntryRequests(prev => prev.filter(req => req.userId !== request.userId));
+    }
+  };
+
+  const handleApproveAllEntries = () => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && meetingId && entryRequests.length > 0) {
+      // Approve all requests
+      entryRequests.forEach(request => {
+        socket.emit('approve-entry', {
+          roomId: meetingId,
+          userId: request.userId
+        });
+      });
+
+      // Clear all pending requests
+      setEntryRequests([]);
+    }
+  };
+
+  const handleDenyAllEntries = () => {
+    const socket = SocketService.getInstance().getSocket();
+    if (socket && meetingId && entryRequests.length > 0) {
+      // Deny all requests
+      entryRequests.forEach(request => {
+        socket.emit('deny-entry', {
+          roomId: meetingId,
+          userId: request.userId
+        });
+      });
+
+      // Clear all pending requests
+      setEntryRequests([]);
+    }
+  };
+
+  const handleToggleAutoApprove = (enabled: boolean) => {
+    setAutoApproveEntries(enabled);
+    console.log('Auto-approve toggled:', enabled);
   };
 
   const handlePinParticipant = (userId: string) => {
@@ -999,6 +1091,13 @@ const markAttendance = async () => {
             onClose={() => setIsInfoDrawerOpen(false)} 
             isTrainer={studentId === "trainer"}
             meetingId={meetingId}
+            entryRequests={entryRequests}
+            autoApprove={autoApproveEntries}
+            onApproveEntry={handleApproveEntry}
+            onDenyEntry={handleDenyEntry}
+            onApproveAll={handleApproveAllEntries}
+            onDenyAll={handleDenyAllEntries}
+            onToggleAutoApprove={handleToggleAutoApprove}
           />
         </div>
       </Drawer>

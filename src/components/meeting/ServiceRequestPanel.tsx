@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { SocketService } from '../../services/socket';
+import React from 'react';
 
 interface EntryRequest {
   userId: string;
@@ -11,89 +10,53 @@ interface ServiceRequestPanelProps {
   onClose: () => void;
   isTrainer: boolean;
   meetingId?: string;
+  entryRequests?: EntryRequest[];
+  autoApprove?: boolean;
+  onApproveEntry?: (request: EntryRequest) => void;
+  onDenyEntry?: (request: EntryRequest) => void;
+  onApproveAll?: () => void;
+  onDenyAll?: () => void;
+  onToggleAutoApprove?: (enabled: boolean) => void;
 }
 
 const ServiceRequestPanel: React.FC<ServiceRequestPanelProps> = ({ 
   onClose, 
   isTrainer, 
-  meetingId 
+  entryRequests = [],
+  autoApprove = false,
+  onApproveEntry,
+  onDenyEntry,
+  onApproveAll,
+  onDenyAll,
+  onToggleAutoApprove
 }) => {
-  const [entryRequests, setEntryRequests] = useState<EntryRequest[]>([]);
-  const [autoApprove, setAutoApprove] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!isTrainer) return;
-
-    const socket = SocketService.getInstance().getSocket();
-    if (!socket) {
-      console.log('No socket available for entry requests');
-      return;
-    }
-
-    console.log('Setting up entry request listener, meetingId:', meetingId, 'autoApprove:', autoApprove);
-
-    const handleEntryRequest = (payload: any) => {
-      console.log('Entry request received:', payload);
-      
-      if (autoApprove) {
-        console.log('Auto-approving entry for:', payload.displayName);
-        // Auto-approve if enabled
-        const socket = SocketService.getInstance().getSocket();
-        if (socket && meetingId) {
-          socket.emit('approve-entry', {
-            roomId: meetingId,
-            userId: payload.userId
-          });
-          console.log('Sent auto-approve for userId:', payload.userId, 'roomId:', meetingId);
-        } else {
-          console.error('Socket or meetingId not available for auto-approve:', { socket: !!socket, meetingId });
-        }
-        return;
-      }
-
-      setEntryRequests(prev => {
-        // Check if request already exists
-        const exists = prev.find(req => req.userId === payload.userId);
-        if (exists) return prev;
-        
-        return [...prev, {
-          userId: payload.userId,
-          displayName: payload.displayName,
-          timestamp: new Date().toISOString()
-        }];
-      });
-    };
-
-    socket.on('entry-request', handleEntryRequest);
-
-    return () => {
-      socket.off('entry-request', handleEntryRequest);
-    };
-  }, [isTrainer, autoApprove, meetingId]); // Added autoApprove and meetingId to dependencies
-
   const handleApproveEntry = (request: EntryRequest) => {
-    const socket = SocketService.getInstance().getSocket();
-    if (socket && meetingId) {
-      socket.emit('approve-entry', {
-        roomId: meetingId,
-        userId: request.userId
-      });
-
-      // Remove from pending requests
-      setEntryRequests(prev => prev.filter(req => req.userId !== request.userId));
+    if (onApproveEntry) {
+      onApproveEntry(request);
     }
   };
 
   const handleDenyEntry = (request: EntryRequest) => {
-    const socket = SocketService.getInstance().getSocket();
-    if (socket && meetingId) {
-      socket.emit('deny-entry', {
-        roomId: meetingId,
-        userId: request.userId
-      });
+    if (onDenyEntry) {
+      onDenyEntry(request);
+    }
+  };
 
-      // Remove from pending requests
-      setEntryRequests(prev => prev.filter(req => req.userId !== request.userId));
+  const handleApproveAll = () => {
+    if (onApproveAll) {
+      onApproveAll();
+    }
+  };
+
+  const handleDenyAll = () => {
+    if (onDenyAll) {
+      onDenyAll();
+    }
+  };
+
+  const handleToggleAutoApprove = () => {
+    if (onToggleAutoApprove) {
+      onToggleAutoApprove(!autoApprove);
     }
   };
 
@@ -133,11 +96,7 @@ const ServiceRequestPanel: React.FC<ServiceRequestPanelProps> = ({
         <div className="flex items-center space-x-2">
           {/* Auto-approve toggle */}
           <button
-            onClick={() => {
-              const newState = !autoApprove;
-              console.log('Auto-approve toggled:', newState);
-              setAutoApprove(newState);
-            }}
+            onClick={handleToggleAutoApprove}
             className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               autoApprove 
                 ? 'bg-green-100 text-green-800 hover:bg-green-200' 
@@ -201,7 +160,33 @@ const ServiceRequestPanel: React.FC<ServiceRequestPanelProps> = ({
             </p>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-4">
+          <div className="space-y-4">
+            {/* Bulk Action Buttons */}
+            {entryRequests.length > 1 && (
+              <div className="flex space-x-3 mb-4">
+                <button
+                  onClick={handleApproveAll}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md text-sm"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Approve All ({entryRequests.length})
+                </button>
+                <button
+                  onClick={handleDenyAll}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md text-sm"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Deny All ({entryRequests.length})
+                </button>
+              </div>
+            )}
+            
+            {/* Individual Requests */}
+            <div className="space-y-3 sm:space-y-4">
             {entryRequests.map((request, index) => (
               <div 
                 key={`${request.userId}-${index}`} 
@@ -245,6 +230,7 @@ const ServiceRequestPanel: React.FC<ServiceRequestPanelProps> = ({
                 </div>
               </div>
             ))}
+          </div>
           </div>
         )}
       </div>
